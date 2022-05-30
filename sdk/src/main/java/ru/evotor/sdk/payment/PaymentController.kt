@@ -105,4 +105,6 @@ class PaymentController(context: Context) {
     fun balanceInquiry(currency: Currency, acquirerCode: String) {
 
     }
+
+    fun getBluetoothService() = bluetoothService
 }

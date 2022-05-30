@@ -214,7 +214,7 @@ class BluetoothService(private val context: Context) : CommandsInterface {
         this.paymentControllerListener = paymentControllerListener
     }
 
-    fun convertToValidJson(json: String?): JSONObject? =
+    private fun convertToValidJson(json: String?): JSONObject? =
         if (json.isNullOrEmpty()) {
             null
         } else {
