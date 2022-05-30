@@ -142,7 +142,7 @@ class BluetoothService(private val context: Context) : CommandsInterface {
         val jsonObject = JSONObject()
         jsonObject.put("command", BluetoothCommand.START_PAYMENT)
         jsonObject.put("amount", amount)
-        jsonObject.put("data", JSONObject(json.orEmpty()))
+        jsonObject.put("data", convertToValidJson(json))
         sendBluetoothData(jsonObject.toString())
     }
 
@@ -150,7 +150,7 @@ class BluetoothService(private val context: Context) : CommandsInterface {
         val jsonObject = JSONObject()
         jsonObject.put("command", BluetoothCommand.START_REFUND)
         jsonObject.put("amount", amount)
-        jsonObject.put("data", JSONObject(json.orEmpty()))
+        jsonObject.put("data", convertToValidJson(json))
         sendBluetoothData(jsonObject.toString())
     }
 
@@ -158,7 +158,7 @@ class BluetoothService(private val context: Context) : CommandsInterface {
         val jsonObject = JSONObject()
         jsonObject.put("command", BluetoothCommand.START_REVERSAL)
         jsonObject.put("amount", amount)
-        jsonObject.put("data", JSONObject(json.orEmpty()))
+        jsonObject.put("data", convertToValidJson(json))
         sendBluetoothData(jsonObject.toString())
     }
 
@@ -172,7 +172,7 @@ class BluetoothService(private val context: Context) : CommandsInterface {
         val jsonObject = JSONObject()
         jsonObject.put("command", BluetoothCommand.CASHOUT)
         jsonObject.put("cashBack", cashBack)
-        jsonObject.put("data", JSONObject(json.orEmpty()))
+        jsonObject.put("data", convertToValidJson(json))
         sendBluetoothData(jsonObject.toString())
     }
 
@@ -181,7 +181,7 @@ class BluetoothService(private val context: Context) : CommandsInterface {
         jsonObject.put("command", BluetoothCommand.PURCHASE_WITH_CASHBACK)
         jsonObject.put("amount", amount)
         jsonObject.put("cashBack", cashBack)
-        jsonObject.put("data", JSONObject(json.orEmpty()))
+        jsonObject.put("data", convertToValidJson(json))
         sendBluetoothData(jsonObject.toString())
     }
 
@@ -213,4 +213,11 @@ class BluetoothService(private val context: Context) : CommandsInterface {
     fun setPaymentControllerListener(paymentControllerListener: PaymentControllerListener) {
         this.paymentControllerListener = paymentControllerListener
     }
+
+    fun convertToValidJson(json: String?): JSONObject? =
+        if (json.isNullOrEmpty()) {
+            null
+        } else {
+            JSONObject(json)
+        }
 }
