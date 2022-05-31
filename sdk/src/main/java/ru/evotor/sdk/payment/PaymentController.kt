@@ -1,6 +1,9 @@
 package ru.evotor.sdk.payment
 
 import android.content.Context
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
 import ru.evotor.sdk.api.RetrofitCommon
 import ru.evotor.sdk.api.RetrofitService
 import ru.evotor.sdk.bluetooth.BluetoothService
@@ -21,9 +24,11 @@ class PaymentController(context: Context) {
     /**
      * Получение токена
      */
-    fun setCredentials(login: String, password: String) {
-        token = retrofitService.getToken(login, password).body()?.string()
-        val test = 0
+    suspend fun setCredentials(login: String, password: String) {
+        CoroutineScope(Dispatchers.IO).launch {
+            token = retrofitService.getToken(login, password).body()?.string()
+            val test = 0
+        }
     }
 
     /**
