@@ -22,7 +22,7 @@ class PaymentController(context: Context) {
      * Получение токена
      */
     fun setCredentials(login: String, password: String) {
-        token = retrofitService.getToken(login, password).body()
+        token = retrofitService.getToken(login, password).body()?.string()
         val test = 0
     }
 
