@@ -1,6 +1,8 @@
 package ru.evotor.sdk.payment
 
 import android.content.Context
+import ru.evotor.sdk.api.RetrofitCommon
+import ru.evotor.sdk.api.RetrofitService
 import ru.evotor.sdk.bluetooth.BluetoothService
 import ru.evotor.sdk.payment.PaymentControllerListener
 import ru.evotor.sdk.payment.PaymentException
@@ -12,6 +14,17 @@ import ru.evotor.sdk.payment.enums.Currency
 class PaymentController(context: Context) {
 
     private val bluetoothService: BluetoothService = BluetoothService(context)
+    private val retrofitService: RetrofitService = RetrofitCommon.retrofitService
+
+    private var token: String? = null
+
+    /**
+     * Получение токена
+     */
+    fun setCredentials(login: String, password: String) {
+        token = retrofitService.getToken(login, password).body()
+        val test = 0
+    }
 
     /**
      * Начинает работу со считывателем карт
