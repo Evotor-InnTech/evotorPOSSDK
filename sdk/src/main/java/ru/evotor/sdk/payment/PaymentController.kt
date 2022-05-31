@@ -9,9 +9,7 @@ import ru.evotor.sdk.api.RetrofitService
 import ru.evotor.sdk.bluetooth.BluetoothService
 import ru.evotor.sdk.payment.PaymentControllerListener
 import ru.evotor.sdk.payment.PaymentException
-import ru.evotor.sdk.payment.entities.GiftCardActivationContext
-import ru.evotor.sdk.payment.entities.PaymentContext
-import ru.evotor.sdk.payment.entities.ReverseContext
+import ru.evotor.sdk.payment.entities.*
 import ru.evotor.sdk.payment.enums.Currency
 
 class PaymentController(context: Context) {
@@ -21,13 +19,18 @@ class PaymentController(context: Context) {
 
     private var token: String? = null
 
+    private var paymentControllerListener: PaymentControllerListener? = null
+
     /**
      * Получение токена
      */
-    suspend fun setCredentials(login: String, password: String) {
+    fun setCredentials(login: String, password: String) {
         CoroutineScope(Dispatchers.IO).launch {
-            token = retrofitService.getToken(login, password).body()?.string()
-            val test = 0
+            try {
+                token = retrofitService.getToken(login, password).body()?.string()
+            } catch (exception: Exception) {
+                //TODO Поставить обработку
+            }
         }
     }
 
@@ -51,7 +54,7 @@ class PaymentController(context: Context) {
      * @param paymentControllerListener - обработчик событий
      */
     fun setPaymentControllerListener(paymentControllerListener: PaymentControllerListener) {
-        bluetoothService.setPaymentControllerListener(paymentControllerListener)
+        this.paymentControllerListener = paymentControllerListener
     }
 
     /**
@@ -64,6 +67,16 @@ class PaymentController(context: Context) {
      */
     @Throws(PaymentException::class)
     fun startPayment(paymentContext: PaymentContext) {
+        val paymentResultListener = object : PaymentResultListener {
+            override fun onResult(resultData: ResultData) {
+                //TODO Метод по отправке данных чека на сервер
+
+                //TODO После успеха...
+                paymentControllerListener?.onFinished(PaymentResultContext(resultData.ERROR == "0"))
+            }
+        }
+
+        bluetoothService.setResultListener(paymentResultListener)
         bluetoothService.startPayment(paymentContext.amount?.toPlainString(), null)
     }
 

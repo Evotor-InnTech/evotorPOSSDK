@@ -8,7 +8,7 @@ import retrofit2.http.Query
 interface RetrofitService {
 
     @GET("authorize")
-    fun getToken(
+    suspend fun getToken(
         @Query("login") login: String,
         @Query("password") password: String
     ): Response<ResponseBody>

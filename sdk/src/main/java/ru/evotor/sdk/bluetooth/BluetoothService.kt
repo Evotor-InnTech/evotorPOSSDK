@@ -16,6 +16,8 @@ import ru.evotor.sdk.payment.PaymentControllerListener
 import ru.evotor.sdk.payment.entities.PaymentResultContext
 import ru.evotor.sdk.payment.entities.ResultData
 import ru.evotor.sdk.bluetooth.BluetoothCommand
+import ru.evotor.sdk.payment.PaymentResultListener
+import java.io.DataInputStream
 import java.io.InputStream
 import java.io.OutputStream
 import java.util.*
@@ -34,9 +36,8 @@ class BluetoothService(private val context: Context) : CommandsInterface {
 
     private var inStream: InputStream? = null
     private var outStream: OutputStream? = null
-    private val buffer: ByteArray = ByteArray(1024)
 
-    private var paymentControllerListener: PaymentControllerListener? = null
+    private var paymentResultListener: PaymentResultListener? = null
 
     init {
         val bluetoothManager =
@@ -116,13 +117,14 @@ class BluetoothService(private val context: Context) : CommandsInterface {
         inStream = socket?.inputStream
         outStream = socket?.outputStream
 
+        val buffer = ByteArray(1024 * 4)
         var bytes: Int
 
         while (true) {
             try {
                 bytes = inStream?.read(buffer) ?: 0
-                processBluetoothData(String(buffer, 0, bytes))
-                Log.d(TAG, String(buffer, 0, bytes))
+                val message = String(buffer, 0, bytes)
+                processBluetoothData(message)
             } catch (exception: Exception) {
                 Log.e(TAG, exception.message.toString())
                 break
@@ -204,14 +206,22 @@ class BluetoothService(private val context: Context) : CommandsInterface {
         sendBluetoothData(jsonObject.toString())
     }
 
+    private val resultBuilder = StringBuilder()
+
     private fun processBluetoothData(data: String) {
-        val result = Gson().fromJson(data, ResultData::class.java)
-        val paymentResultContext = PaymentResultContext(result.ERROR == "0")
-        paymentControllerListener?.onFinished(paymentResultContext)
+        resultBuilder.append(data)
+
+        try {
+            val result = Gson().fromJson(resultBuilder.toString(), ResultData::class.java)
+            resultBuilder.clear()
+            paymentResultListener?.onResult(result)
+        } catch (exception: Exception) {
+            return
+        }
     }
 
-    fun setPaymentControllerListener(paymentControllerListener: PaymentControllerListener) {
-        this.paymentControllerListener = paymentControllerListener
+    fun setResultListener(paymentResultListener: PaymentResultListener) {
+        this.paymentResultListener = paymentResultListener
     }
 
     private fun convertToValidJson(json: String?): JSONObject? =
