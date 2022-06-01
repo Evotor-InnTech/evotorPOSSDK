@@ -49,5 +49,13 @@ data class PaymentContext(
     /**
      * Код банка
      */
-    var acquirerCode: String? = null
+    var acquirerCode: String? = null,
+    /**
+     * Логин пользователя в системе
+     */
+    var login: String? = null,
+    /**
+     * Пароль пользователя в системе
+     */
+    var password: String? = null
 )

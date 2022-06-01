@@ -7,10 +7,9 @@ import kotlinx.coroutines.launch
 import ru.evotor.sdk.api.RetrofitCommon
 import ru.evotor.sdk.api.RetrofitService
 import ru.evotor.sdk.bluetooth.BluetoothService
-import ru.evotor.sdk.payment.PaymentControllerListener
-import ru.evotor.sdk.payment.PaymentException
 import ru.evotor.sdk.payment.entities.*
 import ru.evotor.sdk.payment.enums.Currency
+import java.util.*
 
 class PaymentController(context: Context) {
 
@@ -24,12 +23,19 @@ class PaymentController(context: Context) {
     /**
      * Получение токена
      */
-    fun setCredentials(login: String, password: String) {
+    fun setCredentials(login: String, password: String, errorHandler: (String) -> Unit) {
         CoroutineScope(Dispatchers.IO).launch {
             try {
-                token = retrofitService.getToken(login, password).body()?.string()
+                val response = retrofitService.getToken(login, password)
+                if (response.isSuccessful) {
+                    token = response.body()?.string()
+                } else {
+                    throw RuntimeException(response.code().toString())
+                }
             } catch (exception: Exception) {
-                //TODO Поставить обработку
+                CoroutineScope(Dispatchers.Main).launch {
+                    errorHandler(exception.message.toString())
+                }
             }
         }
     }
@@ -69,10 +75,21 @@ class PaymentController(context: Context) {
     fun startPayment(paymentContext: PaymentContext) {
         val paymentResultListener = object : PaymentResultListener {
             override fun onResult(resultData: ResultData) {
-                //TODO Метод по отправке данных чека на сервер
-
-                //TODO После успеха...
-                paymentControllerListener?.onFinished(PaymentResultContext(resultData.ERROR == "0"))
+                CoroutineScope(Dispatchers.IO).launch {
+                    try {
+                        val response = retrofitService.sendReceipt(
+                            token.orEmpty(),
+                            convertToReceipt(paymentContext, resultData)
+                        )
+                        CoroutineScope(Dispatchers.Main).launch {
+                            paymentControllerListener?.onFinished(PaymentResultContext(response.isSuccessful))
+                        }
+                    } catch (exception: Exception) {
+                        CoroutineScope(Dispatchers.Main).launch {
+                            paymentControllerListener?.onFinished(PaymentResultContext(false))
+                        }
+                    }
+                }
             }
         }
 
@@ -138,4 +155,42 @@ class PaymentController(context: Context) {
     }
 
     fun getBluetoothService() = bluetoothService
+
+    private fun convertToReceipt(paymentContext: PaymentContext, resultData: ResultData) =
+        ReceiptBody(
+            amount = resultData.AMOUNT,
+            description = paymentContext.description,
+            currency = paymentContext.currency?.name ?: Currency.RUB.name,
+            suppressSignatureWaiting = paymentContext.suppressSignatureWaiting,
+            paymentProductTextData = paymentContext.paymentProductTextData,
+            paymentProductCode = paymentContext.paymentProductCode,
+            extID = paymentContext.extID,
+            method = paymentContext.method?.name,
+            acquirerCode = paymentContext.acquirerCode,
+            mid = resultData.MID,
+            pan = resultData.PAN,
+            hash = resultData.HASH,
+            requestId = resultData.REQUEST_ID,
+            tsn = resultData.TSN,
+            time = resultData.TIME,
+            rrn = resultData.RRN,
+            hashAlgo = resultData.HASH_ALGO,
+            isOwn = resultData.IS_OWN,
+            cardName = resultData.CARD_NAME,
+            date = resultData.DATE,
+            tid = resultData.TID,
+            amountClear = resultData.AMOUNT_C,
+            encryptedData = resultData.ENCRYPTED_DATA,
+            holderName = resultData.HOLDENAME,
+            flags = resultData.FLAGS,
+            expDate = resultData.EXP_DATE,
+            lltId = resultData.LLT_ID,
+            authCode = resultData.AUTH_CODE,
+            message = resultData.MESSAGE,
+            pilOfType = resultData.PIL_OP_TYPE,
+            error = resultData.ERROR,
+            cardId = resultData.CARD_ID,
+            login = paymentContext.login,
+            password = paymentContext.password
+        )
 }
