@@ -99,5 +99,9 @@ data class ResultData(
     /**
      * ???
      */
-    val CARD_ID: String
+    val CARD_ID: String,
+    /**
+     * Номер карты лояльности
+     */
+    val LOYALTY_NUMBER: String?
 )

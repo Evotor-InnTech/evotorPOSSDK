@@ -9,6 +9,7 @@ import ru.evotor.sdk.api.RetrofitService
 import ru.evotor.sdk.bluetooth.BluetoothService
 import ru.evotor.sdk.payment.entities.*
 import ru.evotor.sdk.payment.enums.Currency
+import java.math.BigDecimal
 import java.util.*
 
 class PaymentController(context: Context) {
@@ -23,12 +24,18 @@ class PaymentController(context: Context) {
     /**
      * Получение токена
      */
-    fun setCredentials(login: String, password: String, errorHandler: (String) -> Unit) {
+    fun setCredentials(
+        login: String,
+        password: String,
+        successHandler: (String) -> Unit,
+        errorHandler: (String) -> Unit
+    ) {
         CoroutineScope(Dispatchers.IO).launch {
             try {
                 val response = retrofitService.getToken(login, password)
                 if (response.isSuccessful) {
                     token = response.body()?.string()
+                    successHandler(token.orEmpty())
                 } else {
                     throw RuntimeException(response.code().toString())
                 }
@@ -81,12 +88,26 @@ class PaymentController(context: Context) {
                             token.orEmpty(),
                             convertToReceipt(paymentContext, resultData)
                         )
-                        CoroutineScope(Dispatchers.Main).launch {
-                            paymentControllerListener?.onFinished(PaymentResultContext(response.isSuccessful))
+                        if (response.isSuccessful) {
+                            CoroutineScope(Dispatchers.Main).launch {
+                                paymentControllerListener?.onFinished(
+                                    PaymentResultContext(
+                                        true,
+                                        null
+                                    )
+                                )
+                            }
+                        } else {
+                            throw RuntimeException(response.code().toString())
                         }
                     } catch (exception: Exception) {
                         CoroutineScope(Dispatchers.Main).launch {
-                            paymentControllerListener?.onFinished(PaymentResultContext(false))
+                            paymentControllerListener?.onFinished(
+                                PaymentResultContext(
+                                    false,
+                                    exception.message.toString()
+                                )
+                            )
                         }
                     }
                 }
@@ -126,8 +147,55 @@ class PaymentController(context: Context) {
      *
      * @param giftCardActivationContext - данные для проведения активации подарочной карты
      */
-    fun giftCardActivate(giftCardActivationContext: GiftCardActivationContext) {
-
+    fun giftCardActivate(
+        giftCardActivationContext: GiftCardActivationContext,
+        paymentProductTextData: Map<String, String>? = null
+    ) {
+        CoroutineScope(Dispatchers.IO).launch {
+            try {
+                val response = retrofitService.sendGift(
+                    token.orEmpty(),
+                    GiftActivationBody(
+                        loyaltyNumber = giftCardActivationContext.loyalty_number,
+                        tid = giftCardActivationContext.tid,
+                        login = giftCardActivationContext.login,
+                        amount = giftCardActivationContext.amount ?: BigDecimal.ZERO,
+                        paymentProductTextData = paymentProductTextData
+                    )
+                )
+                if (response.isSuccessful) {
+                    val body = response.body()
+                    if (body?.errorMessage != null) {
+                        throw RuntimeException(body.errorMessage.toString())
+                    } else {
+                        CoroutineScope(Dispatchers.Main).launch {
+                            paymentControllerListener?.onFinished(
+                                PaymentResultContext(
+                                    response.isSuccessful,
+                                    null,
+                                    GiftPaymentData(
+                                        (response.body()?.transactionId ?: 0L).toString(),
+                                        giftCardActivationContext.tid,
+                                        giftCardActivationContext.loyalty_number
+                                    )
+                                )
+                            )
+                        }
+                    }
+                } else {
+                    throw RuntimeException(response.code().toString())
+                }
+            } catch (exception: Exception) {
+                CoroutineScope(Dispatchers.Main).launch {
+                    paymentControllerListener?.onFinished(
+                        PaymentResultContext(
+                            false,
+                            exception.message.toString()
+                        )
+                    )
+                }
+            }
+        }
     }
 
     /**
@@ -136,7 +204,45 @@ class PaymentController(context: Context) {
      * @param giftCardActivationContext - данные для проведения деактивации подарочной карты
      */
     fun giftCardDeactivate(giftCardActivationContext: GiftCardActivationContext) {
-
+        CoroutineScope(Dispatchers.IO).launch {
+            try {
+                val response = retrofitService.cancelGift(
+                    token.orEmpty(),
+                    GiftCancelBody(
+                        loyalty_number = giftCardActivationContext.loyalty_number,
+                        tid = giftCardActivationContext.tid,
+                        login = giftCardActivationContext.login,
+                        transactionId = giftCardActivationContext.transactionId.orEmpty()
+                    )
+                )
+                if (response.isSuccessful) {
+                    val body = response.body()
+                    if (body?.errorMessage != null) {
+                        throw RuntimeException(body.errorMessage.toString())
+                    } else {
+                        CoroutineScope(Dispatchers.Main).launch {
+                            paymentControllerListener?.onFinished(
+                                PaymentResultContext(
+                                    response.isSuccessful,
+                                    null
+                                )
+                            )
+                        }
+                    }
+                } else {
+                    throw RuntimeException(response.code().toString())
+                }
+            } catch (exception: Exception) {
+                CoroutineScope(Dispatchers.Main).launch {
+                    paymentControllerListener?.onFinished(
+                        PaymentResultContext(
+                            false,
+                            exception.message.toString()
+                        )
+                    )
+                }
+            }
+        }
     }
 
     /**
@@ -150,8 +256,53 @@ class PaymentController(context: Context) {
      * @param acquirerCode - код банка
      */
     @Throws(PaymentException::class)
-    fun balanceInquiry(currency: Currency, acquirerCode: String) {
+    fun balanceInquiry(
+        login: String,
+        successHandler: (GiftResult) -> Unit,
+        errorHandler: (String) -> Unit
+    ) {
+        val paymentResultListener = object : PaymentResultListener {
+            override fun onResult(resultData: ResultData) {
+                CoroutineScope(Dispatchers.IO).launch {
+                    try {
+                        val response = retrofitService.getGiftBalance(
+                            token.orEmpty(),
+                            GiftBalanceBody(
+                                loyaltyNumber = resultData.LOYALTY_NUMBER.orEmpty(),
+                                tid = resultData.TID,
+                                login = login
+                            )
+                        )
+                        if (response.isSuccessful) {
+                            val body = response.body()
+                            if (body?.errorMessage != null) {
+                                throw RuntimeException(body.errorMessage.toString())
+                            } else {
+                                CoroutineScope(Dispatchers.Main).launch {
+                                    successHandler(
+                                        GiftResult(
+                                            loyaltyCardTrack = resultData.LOYALTY_NUMBER.orEmpty(),
+                                            tid = resultData.TID,
+                                            balance = response.body()?.balance
+                                                ?: BigDecimal.ZERO
+                                        )
+                                    )
+                                }
+                            }
+                        } else {
+                            throw RuntimeException(response.code().toString())
+                        }
+                    } catch (exception: Exception) {
+                        CoroutineScope(Dispatchers.Main).launch {
+                            errorHandler(exception.message.toString())
+                        }
+                    }
+                }
+            }
+        }
 
+        bluetoothService.setResultListener(paymentResultListener)
+        bluetoothService.startPayment("1", null)
     }
 
     fun getBluetoothService() = bluetoothService

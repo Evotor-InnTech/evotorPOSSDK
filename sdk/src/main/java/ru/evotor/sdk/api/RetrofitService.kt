@@ -3,7 +3,7 @@ package ru.evotor.sdk.api
 import okhttp3.ResponseBody
 import retrofit2.Response
 import retrofit2.http.*
-import ru.evotor.sdk.payment.entities.ReceiptBody
+import ru.evotor.sdk.payment.entities.*
 
 interface RetrofitService {
 
@@ -18,4 +18,22 @@ interface RetrofitService {
         @Header("Authorization") token: String,
         @Body receiptBody: ReceiptBody
     ): Response<ResponseBody>
+
+    @POST("giftcard/balance")
+    suspend fun getGiftBalance(
+        @Header("Authorization") token: String,
+        @Body giftBody: GiftBalanceBody
+    ): Response<GiftResponse>
+
+    @POST("giftcard/authorize")
+    suspend fun sendGift(
+        @Header("Authorization") token: String,
+        @Body giftBody: GiftActivationBody
+    ): Response<GiftActivateResponse>
+
+    @POST("giftcard/cancel")
+    suspend fun cancelGift(
+        @Header("Authorization") token: String,
+        @Body cancelGiftBody: GiftCancelBody
+    ): Response<GiftActivateResponse>
 }
