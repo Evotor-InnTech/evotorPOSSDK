@@ -17,6 +17,12 @@ interface RetrofitService {
     suspend fun sendReceipt(
         @Header("Authorization") token: String,
         @Body receiptBody: ReceiptBody
+    ): Response<SendReceiptResponse>
+
+    @POST("transaction/reversal")
+    suspend fun reverse(
+        @Header("Authorization") token: String,
+        @Body reverseBody: ReverseBody
     ): Response<ResponseBody>
 
     @POST("giftcard/balance")

@@ -1,6 +1,16 @@
 package ru.evotor.sdk.payment
 
+import android.Manifest
+import android.annotation.SuppressLint
+import android.app.Activity
+import android.bluetooth.BluetoothDevice
+import android.content.BroadcastReceiver
 import android.content.Context
+import android.content.Intent
+import android.content.IntentFilter
+import android.content.pm.PackageManager
+import androidx.core.content.ContextCompat
+import androidx.lifecycle.MutableLiveData
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -18,8 +28,6 @@ class PaymentController(context: Context) {
     private val retrofitService: RetrofitService = RetrofitCommon.retrofitService
 
     private var token: String? = null
-
-    private var paymentControllerListener: PaymentControllerListener? = null
 
     /**
      * Получение токена
@@ -47,27 +55,72 @@ class PaymentController(context: Context) {
         }
     }
 
+    private var receiver: BroadcastReceiver? = null
+
     /**
      * Начинает работу со считывателем карт
      */
-    fun enable() {
+    fun enable(
+        context: Context,
+        onSuccessHandler: (BluetoothDevice) -> Unit,
+        errorHandler: (String) -> Unit
+    ) {
+        if (ContextCompat.checkSelfPermission(
+                context,
+                Manifest.permission.BLUETOOTH_CONNECT
+            ) != PackageManager.PERMISSION_GRANTED
+        ) {
+            errorHandler("Необходим Manifest.permission.BLUETOOTH_CONNECT permission")
+            return
+        }
 
+        if (ContextCompat.checkSelfPermission(
+                context,
+                Manifest.permission.BLUETOOTH_SCAN
+            ) != PackageManager.PERMISSION_GRANTED
+        ) {
+            errorHandler("Необходим Manifest.permission.BLUETOOTH_SCAN permission")
+            return
+        }
+
+        if (ContextCompat.checkSelfPermission(
+                context,
+                Manifest.permission.ACCESS_COARSE_LOCATION
+            ) != PackageManager.PERMISSION_GRANTED
+        ) {
+            errorHandler("Необходим Manifest.permission.ACCESS_COARSE_LOCATION permission")
+            return
+        }
+
+        receiver = object : BroadcastReceiver() {
+            @SuppressLint("MissingPermission")
+            override fun onReceive(context: Context, intent: Intent) {
+                when (intent.action) {
+                    BluetoothDevice.ACTION_FOUND -> {
+                        val device: BluetoothDevice? =
+                            intent.getParcelableExtra(BluetoothDevice.EXTRA_DEVICE)
+                        if (device != null && device.name == "CloudPOS") {
+                            CoroutineScope(Dispatchers.IO).launch {
+                                bluetoothService.selectBluetoothDevice(device.address, device)
+                            }
+                            onSuccessHandler(device)
+                        }
+                    }
+                }
+            }
+        }
+
+        bluetoothService.startDiscovery()
+
+        val filter = IntentFilter(BluetoothDevice.ACTION_FOUND)
+        context.registerReceiver(receiver, filter)
     }
 
     /**
      * Завершает работу со считывателем карт
      */
-    fun disable() {
-
-    }
-
-    /**
-     * Задает новый обработчик событий проведения платежа
-     *
-     * @param paymentControllerListener - обработчик событий
-     */
-    fun setPaymentControllerListener(paymentControllerListener: PaymentControllerListener) {
-        this.paymentControllerListener = paymentControllerListener
+    fun disable(context: Context) {
+        context.unregisterReceiver(receiver)
     }
 
     /**
@@ -77,23 +130,36 @@ class PaymentController(context: Context) {
     PaymentException
      *
      * @param paymentContext - данные платежа
+     * @return PaymentResultData - все данные по транзакции
      */
     @Throws(PaymentException::class)
-    fun startPayment(paymentContext: PaymentContext) {
+    fun startPayment(
+        paymentContext: PaymentContext,
+        resultHandler: (PaymentResultContext) -> Unit
+    ) {
         val paymentResultListener = object : PaymentResultListener {
             override fun onResult(resultData: ResultData) {
                 CoroutineScope(Dispatchers.IO).launch {
                     try {
+                        if (resultData.ERROR != "0") {
+                            throw RuntimeException(resultData.MESSAGE)
+                        }
                         val response = retrofitService.sendReceipt(
                             token.orEmpty(),
                             convertToReceipt(paymentContext, resultData)
                         )
                         if (response.isSuccessful) {
                             CoroutineScope(Dispatchers.Main).launch {
-                                paymentControllerListener?.onFinished(
+                                resultHandler(
                                     PaymentResultContext(
                                         true,
-                                        null
+                                        null,
+                                        PaymentResultData(
+                                            convertToReceipt(
+                                                paymentContext,
+                                                resultData
+                                            ), response.body()?.transactionId.orEmpty()
+                                        )
                                     )
                                 )
                             }
@@ -102,7 +168,7 @@ class PaymentController(context: Context) {
                         }
                     } catch (exception: Exception) {
                         CoroutineScope(Dispatchers.Main).launch {
-                            paymentControllerListener?.onFinished(
+                            resultHandler(
                                 PaymentResultContext(
                                     false,
                                     exception.message.toString()
@@ -119,26 +185,61 @@ class PaymentController(context: Context) {
     }
 
     /**
-     * Начинает выполнение отмены платежа. При попытке
+     * Начинает выполнение возврата/отмены платежа. При попытке
     начать новый платеж/отмену платежа до окончания будет
     сгенерировано исключение PaymentException
      *
      * @param reverseContext - данные для проведения отмены/возврата
      */
     @Throws(PaymentException::class)
-    fun cancelPayment(reverseContext: ReverseContext) {
-        bluetoothService.startReversal(reverseContext.returnAmount?.toPlainString(), null)
-    }
+    fun cancelPayment(
+        reverseContext: ReverseContext,
+        resultHandler: (PaymentResultContext) -> Unit
+    ) {
+        val paymentResultListener = object : PaymentResultListener {
+            override fun onResult(resultData: ResultData) {
+                CoroutineScope(Dispatchers.IO).launch {
+                    try {
+                        if (resultData.ERROR != "0") {
+                            throw RuntimeException(resultData.MESSAGE)
+                        }
+                        val response = retrofitService.reverse(
+                            token.orEmpty(),
+                            convertToReverse(reverseContext, resultData)
+                        )
+                        if (response.isSuccessful) {
+                            CoroutineScope(Dispatchers.Main).launch {
+                                resultHandler(
+                                    PaymentResultContext(
+                                        true,
+                                        null,
+                                        ReverseResultData(
+                                            convertToReverse(
+                                                reverseContext,
+                                                resultData
+                                            )
+                                        )
+                                    )
+                                )
+                            }
+                        } else {
+                            throw RuntimeException(response.code().toString())
+                        }
+                    } catch (exception: Exception) {
+                        CoroutineScope(Dispatchers.Main).launch {
+                            resultHandler(
+                                PaymentResultContext(
+                                    false,
+                                    exception.message.toString()
+                                )
+                            )
+                        }
+                    }
+                }
+            }
+        }
 
-    /**
-     * Начинает выполнение возврата платежа. При попытке
-    начать новый платеж/отмену платежа до окончания будет
-    сгенерировано исключение PaymentException
-     *
-     * @param reverseContext - данные для проведения отмены/возврата
-     */
-    @Throws(PaymentException::class)
-    fun reversePayment(reverseContext: ReverseContext) {
+        bluetoothService.setResultListener(paymentResultListener)
         bluetoothService.startRefund(reverseContext.returnAmount?.toPlainString(), null)
     }
 
@@ -149,7 +250,8 @@ class PaymentController(context: Context) {
      */
     fun giftCardActivate(
         giftCardActivationContext: GiftCardActivationContext,
-        paymentProductTextData: Map<String, String>? = null
+        paymentProductTextData: Map<String, String>? = null,
+        resultHandler: (PaymentResultContext) -> Unit
     ) {
         CoroutineScope(Dispatchers.IO).launch {
             try {
@@ -169,14 +271,15 @@ class PaymentController(context: Context) {
                         throw RuntimeException(body.errorMessage.toString())
                     } else {
                         CoroutineScope(Dispatchers.Main).launch {
-                            paymentControllerListener?.onFinished(
+                            resultHandler(
                                 PaymentResultContext(
                                     response.isSuccessful,
                                     null,
-                                    GiftPaymentData(
+                                    GiftResultData(
                                         (response.body()?.transactionId ?: 0L).toString(),
                                         giftCardActivationContext.tid,
-                                        giftCardActivationContext.loyalty_number
+                                        giftCardActivationContext.loyalty_number,
+                                        giftCardActivationContext.amount ?: BigDecimal.ONE
                                     )
                                 )
                             )
@@ -187,7 +290,7 @@ class PaymentController(context: Context) {
                 }
             } catch (exception: Exception) {
                 CoroutineScope(Dispatchers.Main).launch {
-                    paymentControllerListener?.onFinished(
+                    resultHandler(
                         PaymentResultContext(
                             false,
                             exception.message.toString()
@@ -203,7 +306,10 @@ class PaymentController(context: Context) {
      *
      * @param giftCardActivationContext - данные для проведения деактивации подарочной карты
      */
-    fun giftCardDeactivate(giftCardActivationContext: GiftCardActivationContext) {
+    fun giftCardDeactivate(
+        giftCardActivationContext: GiftCardActivationContext,
+        resultHandler: (PaymentResultContext) -> Unit
+    ) {
         CoroutineScope(Dispatchers.IO).launch {
             try {
                 val response = retrofitService.cancelGift(
@@ -221,7 +327,7 @@ class PaymentController(context: Context) {
                         throw RuntimeException(body.errorMessage.toString())
                     } else {
                         CoroutineScope(Dispatchers.Main).launch {
-                            paymentControllerListener?.onFinished(
+                            resultHandler(
                                 PaymentResultContext(
                                     response.isSuccessful,
                                     null
@@ -234,7 +340,7 @@ class PaymentController(context: Context) {
                 }
             } catch (exception: Exception) {
                 CoroutineScope(Dispatchers.Main).launch {
-                    paymentControllerListener?.onFinished(
+                    resultHandler(
                         PaymentResultContext(
                             false,
                             exception.message.toString()
@@ -269,7 +375,7 @@ class PaymentController(context: Context) {
                             token.orEmpty(),
                             GiftBalanceBody(
                                 loyaltyNumber = resultData.LOYALTY_NUMBER.orEmpty(),
-                                tid = resultData.TID,
+                                tid = resultData.TID.orEmpty(),
                                 login = login
                             )
                         )
@@ -282,9 +388,8 @@ class PaymentController(context: Context) {
                                     successHandler(
                                         GiftResult(
                                             loyaltyCardTrack = resultData.LOYALTY_NUMBER.orEmpty(),
-                                            tid = resultData.TID,
-                                            balance = response.body()?.balance
-                                                ?: BigDecimal.ZERO
+                                            tid = resultData.TID.orEmpty(),
+                                            balance = response.body()?.balance ?: BigDecimal.ZERO
                                         )
                                     )
                                 }
@@ -343,5 +448,40 @@ class PaymentController(context: Context) {
             cardId = resultData.CARD_ID,
             login = paymentContext.login,
             password = paymentContext.password
+        )
+
+    private fun convertToReverse(reverseContext: ReverseContext, resultData: ResultData) =
+        ReverseBody(
+            transactionId = reverseContext.transactionID,
+            amount = resultData.AMOUNT,
+            currency = reverseContext.currency?.name ?: Currency.RUB.name,
+            suppressSignatureWaiting = reverseContext.suppressSignatureWaiting,
+            extID = reverseContext.extID,
+            acquirerCode = reverseContext.acquirerCode,
+            mid = resultData.MID,
+            pan = resultData.PAN,
+            hash = resultData.HASH,
+            requestId = resultData.REQUEST_ID,
+            tsn = resultData.TSN,
+            time = resultData.TIME,
+            rrn = resultData.RRN,
+            hashAlgo = resultData.HASH_ALGO,
+            isOwn = resultData.IS_OWN,
+            cardName = resultData.CARD_NAME,
+            date = resultData.DATE,
+            tid = resultData.TID,
+            amountClear = resultData.AMOUNT_C,
+            encryptedData = resultData.ENCRYPTED_DATA,
+            holderName = resultData.HOLDENAME,
+            flags = resultData.FLAGS,
+            expDate = resultData.EXP_DATE,
+            lltId = resultData.LLT_ID,
+            authCode = resultData.AUTH_CODE,
+            message = resultData.MESSAGE,
+            pilOfType = resultData.PIL_OP_TYPE,
+            error = resultData.ERROR,
+            cardId = resultData.CARD_ID,
+            login = reverseContext.login,
+            password = reverseContext.password
         )
 }

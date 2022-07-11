@@ -24,6 +24,7 @@ class BluetoothConnectionService(private val context: Context) {
     private val resultBuilder = StringBuilder()
     private var paymentResultListener: PaymentResultListener? = null
     private var bluetoothDeviceAddress: String? = null
+    private var bluetoothDevice: BluetoothDevice? = null
 
     companion object {
         private const val SOCKET_UUID = "8f87f7ce-a064-4123-910f-8a28d221b4c5"
@@ -37,8 +38,10 @@ class BluetoothConnectionService(private val context: Context) {
         bluetoothAdapter = bluetoothManager.adapter
     }
 
-    suspend fun onBluetoothDeviceSelected(deviceAddress: String) {
+    suspend fun onBluetoothDeviceSelected(deviceAddress: String, device: BluetoothDevice? = null) {
         bluetoothDeviceAddress = deviceAddress
+        bluetoothDevice = device
+
         if (connectionActive.get()) {
             showConnectionStatus()
         } else {
@@ -59,15 +62,26 @@ class BluetoothConnectionService(private val context: Context) {
 
     @SuppressLint("MissingPermission")
     suspend fun connect() {
-        bluetoothDeviceAddress?.let { deviceAddress ->
-            socket =
-                getPairedDeviceByAddress(deviceAddress).createRfcommSocketToServiceRecord(
-                    UUID.fromString(
-                        SOCKET_UUID
-                    )
+        bluetoothAdapter?.cancelDiscovery()
+
+        if (bluetoothDevice != null) {
+            socket = bluetoothDevice?.createRfcommSocketToServiceRecord(
+                UUID.fromString(
+                    SOCKET_UUID
                 )
-            socket?.connect()
+            )
+        } else {
+            bluetoothDeviceAddress?.let { deviceAddress ->
+                socket =
+                    getPairedDeviceByAddress(deviceAddress).createRfcommSocketToServiceRecord(
+                        UUID.fromString(
+                            SOCKET_UUID
+                        )
+                    )
+            }
         }
+
+        socket?.connect()
 
         socket?.let { clientSocket ->
             //Socket connected

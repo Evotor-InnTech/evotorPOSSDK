@@ -10,6 +10,7 @@ import android.content.Intent
 import android.content.pm.PackageManager
 import android.util.Log
 import androidx.activity.result.ActivityResultLauncher
+import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.GlobalScope
@@ -29,24 +30,38 @@ class BluetoothService(private val context: Context) : CommandsInterface {
         bluetoothAdapter = bluetoothManager.adapter
     }
 
-    suspend fun selectBluetoothDevice(bluetoothDeviceAddress: String) {
-        bluetoothConnectionService.onBluetoothDeviceSelected(bluetoothDeviceAddress)
+    suspend fun selectBluetoothDevice(bluetoothDeviceAddress: String, device: BluetoothDevice? = null) {
+        bluetoothConnectionService.onBluetoothDeviceSelected(bluetoothDeviceAddress, device)
     }
 
     fun checkBluetoothPermissions(
-        bluetoothPermission: ActivityResultLauncher<String>,
+        bluetoothPermission: ActivityResultLauncher<Array<String>>,
         onSuccess: () -> Unit
     ) {
-        when (PackageManager.PERMISSION_GRANTED) {
-            ContextCompat.checkSelfPermission(
+        if (ContextCompat.checkSelfPermission(
                 context,
                 Manifest.permission.BLUETOOTH_CONNECT
-            ) -> {
-                onSuccess()
-            }
-            else -> {
-                bluetoothPermission.launch(Manifest.permission.BLUETOOTH_CONNECT)
-            }
+            ) == PackageManager.PERMISSION_GRANTED && ContextCompat.checkSelfPermission(
+                context,
+                Manifest.permission.BLUETOOTH_SCAN
+            ) == PackageManager.PERMISSION_GRANTED && ContextCompat.checkSelfPermission(
+                context,
+                Manifest.permission.ACCESS_COARSE_LOCATION
+            ) == PackageManager.PERMISSION_GRANTED && ContextCompat.checkSelfPermission(
+                context,
+                Manifest.permission.ACCESS_FINE_LOCATION
+            ) == PackageManager.PERMISSION_GRANTED
+        ) {
+            onSuccess()
+        } else {
+            bluetoothPermission.launch(
+                arrayOf(
+                    Manifest.permission.BLUETOOTH_CONNECT,
+                    Manifest.permission.BLUETOOTH_SCAN,
+                    Manifest.permission.ACCESS_COARSE_LOCATION,
+                    Manifest.permission.ACCESS_FINE_LOCATION
+                )
+            )
         }
     }
 
@@ -64,6 +79,11 @@ class BluetoothService(private val context: Context) : CommandsInterface {
         } else {
             onSuccess()
         }
+    }
+
+    @SuppressLint("MissingPermission")
+    fun startDiscovery() {
+        bluetoothAdapter?.startDiscovery()
     }
 
     @SuppressLint("MissingPermission")

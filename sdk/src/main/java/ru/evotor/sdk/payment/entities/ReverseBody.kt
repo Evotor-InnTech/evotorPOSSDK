@@ -3,25 +3,17 @@ package ru.evotor.sdk.payment.entities
 import android.os.Parcelable
 import com.google.gson.annotations.SerializedName
 import kotlinx.android.parcel.Parcelize
-import ru.evotor.sdk.payment.enums.Currency
-import ru.evotor.sdk.payment.enums.PaymentMethod
-import java.math.BigDecimal
 
 @Parcelize
-data class ReceiptBody(
+data class ReverseBody(
+    @SerializedName("transaction_id")
+    var transactionId: String? = null,
     var amount: String? = null,
-    var description: String? = null,
     var currency: String? = null,
     @SerializedName("suppress_sign")
     var suppressSignatureWaiting: Boolean? = null,
-    @SerializedName("payment_product_text_data")
-    var paymentProductTextData: Map<String, String>? = null,
-    @SerializedName("payment_product_code")
-    var paymentProductCode: String? = null,
     @SerializedName("ext_id")
     var extID: String? = null,
-    @SerializedName("method")
-    var method: String? = null,
     @SerializedName("acquirer_code")
     var acquirerCode: String? = null,
     val mid: String? = null,
