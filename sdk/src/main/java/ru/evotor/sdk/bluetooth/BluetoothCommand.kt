@@ -1,6 +1,11 @@
 package ru.evotor.sdk.bluetooth
 
 enum class BluetoothCommand {
+
+    START_CARD_PAYMENT,
+    START_CARD_REFUND,
+
+
     /**
      * Включение/выключение режима тестового терминала
      */

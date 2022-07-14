@@ -8,12 +8,10 @@ import android.bluetooth.BluetoothSocket
 import android.content.Context
 import android.util.Log
 import android.widget.Toast
-import com.google.gson.Gson
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.GlobalScope
 import kotlinx.coroutines.launch
-import ru.evotor.sdk.payment.PaymentResultListener
-import ru.evotor.sdk.payment.entities.ResultData
+import ru.evotor.sdk.payment.ResultDataListener
 import java.util.*
 import java.util.concurrent.atomic.AtomicBoolean
 
@@ -22,7 +20,7 @@ class BluetoothConnectionService(private val context: Context) {
     private var bluetoothAdapter: BluetoothAdapter? = null
     private var connectionActive: AtomicBoolean = AtomicBoolean(false)
     private val resultBuilder = StringBuilder()
-    private var paymentResultListener: PaymentResultListener? = null
+    private var resultDataListener: ResultDataListener? = null
     private var bluetoothDeviceAddress: String? = null
     private var bluetoothDevice: BluetoothDevice? = null
 
@@ -52,9 +50,9 @@ class BluetoothConnectionService(private val context: Context) {
     private fun showConnectionStatus() {
         GlobalScope.launch(Dispatchers.Main) {
             val text = if (connectionActive.get()) {
-                "Connected"
+                "Устройство подключено"
             } else {
-                "Disconnected"
+                "Устройство отключено"
             }
             Toast.makeText(context, text, Toast.LENGTH_LONG).show()
         }
@@ -115,10 +113,13 @@ class BluetoothConnectionService(private val context: Context) {
     private suspend fun readPacketData(data: String) {
         resultBuilder.append(data)
         try {
-            val result = Gson().fromJson(resultBuilder.toString(), ResultData::class.java)
-            Log.e(TAG, result.toString())
-            resultBuilder.clear()
-            paymentResultListener?.onResult(result)
+            if (resultBuilder.toString().endsWith("}")) {
+                val json = resultBuilder.toString()
+                resultBuilder.clear()
+                resultDataListener?.onResult(json)
+            } else {
+                return
+            }
         } catch (exception: Exception) {
             return
         }
@@ -133,8 +134,8 @@ class BluetoothConnectionService(private val context: Context) {
         }
     }
 
-    fun setResultListener(paymentResultListener: PaymentResultListener) {
-        this.paymentResultListener = paymentResultListener
+    fun setResultDataListener(resultDataListener: ResultDataListener) {
+        this.resultDataListener = resultDataListener
     }
 
     @SuppressLint("MissingPermission")

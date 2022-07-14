@@ -1,9 +1,12 @@
 package ru.evotor.sdk.payment.entities
 
+import android.os.Parcelable
+import kotlinx.android.parcel.Parcelize
 import ru.evotor.sdk.payment.enums.Currency
 import ru.evotor.sdk.payment.enums.ReverseAction
 import java.math.BigDecimal
 
+@Parcelize
 data class ReverseContext(
     /**
      * ID транзакции отменяемого платежа
@@ -76,4 +79,4 @@ data class ReverseContext(
      * Пароль пользователя в системе
      */
     var password: String? = null
-)
+): Parcelable

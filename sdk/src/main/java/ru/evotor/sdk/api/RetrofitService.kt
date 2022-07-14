@@ -13,16 +13,16 @@ interface RetrofitService {
         @Query("password") password: String
     ): Response<ResponseBody>
 
-    @POST("transaction")
-    suspend fun sendReceipt(
+    @POST("transaction/cash")
+    suspend fun sendCash(
         @Header("Authorization") token: String,
-        @Body receiptBody: ReceiptBody
+        @Body receiptBody: PaymentContext
     ): Response<SendReceiptResponse>
 
-    @POST("transaction/reversal")
-    suspend fun reverse(
+    @POST("cash/reversal") //TODO current link
+    suspend fun reverseCash(
         @Header("Authorization") token: String,
-        @Body reverseBody: ReverseBody
+        @Body reverseContext: ReverseContext
     ): Response<ResponseBody>
 
     @POST("giftcard/balance")

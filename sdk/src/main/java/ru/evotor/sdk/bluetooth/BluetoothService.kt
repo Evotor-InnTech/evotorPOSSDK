@@ -8,15 +8,12 @@ import android.bluetooth.BluetoothManager
 import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
+import android.os.Build
 import android.util.Log
 import androidx.activity.result.ActivityResultLauncher
-import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.GlobalScope
-import kotlinx.coroutines.launch
 import org.json.JSONObject
-import ru.evotor.sdk.payment.PaymentResultListener
+import ru.evotor.sdk.payment.ResultDataListener
 
 class BluetoothService(private val context: Context) : CommandsInterface {
 
@@ -54,14 +51,26 @@ class BluetoothService(private val context: Context) : CommandsInterface {
         ) {
             onSuccess()
         } else {
-            bluetoothPermission.launch(
-                arrayOf(
-                    Manifest.permission.BLUETOOTH_CONNECT,
-                    Manifest.permission.BLUETOOTH_SCAN,
-                    Manifest.permission.ACCESS_COARSE_LOCATION,
-                    Manifest.permission.ACCESS_FINE_LOCATION
+
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                bluetoothPermission.launch(
+                    arrayOf(
+                        Manifest.permission.BLUETOOTH,
+                        Manifest.permission.BLUETOOTH_CONNECT,
+                        Manifest.permission.BLUETOOTH_SCAN,
+                        Manifest.permission.ACCESS_COARSE_LOCATION,
+                        Manifest.permission.ACCESS_FINE_LOCATION
+                    )
                 )
-            )
+            } else {
+                bluetoothPermission.launch(
+                    arrayOf(
+                        Manifest.permission.BLUETOOTH,
+                        Manifest.permission.ACCESS_COARSE_LOCATION,
+                        Manifest.permission.ACCESS_FINE_LOCATION
+                    )
+                )
+            }
         }
     }
 
@@ -83,6 +92,9 @@ class BluetoothService(private val context: Context) : CommandsInterface {
 
     @SuppressLint("MissingPermission")
     fun startDiscovery() {
+        if (bluetoothAdapter?.isDiscovering == true) {
+            bluetoothAdapter?.cancelDiscovery()
+        }
         bluetoothAdapter?.startDiscovery()
     }
 
@@ -90,6 +102,21 @@ class BluetoothService(private val context: Context) : CommandsInterface {
     fun getPairedDevices(): List<BluetoothDevice> =
         bluetoothAdapter?.bondedDevices?.toList() ?: listOf()
 
+    override fun startCardPayment(json: String?, token: String) {
+        val jsonObject = JSONObject()
+        jsonObject.put("command", BluetoothCommand.START_CARD_PAYMENT)
+        jsonObject.put("token", token)
+        jsonObject.put("data", convertToValidJson(json))
+        bluetoothConnectionService.sendBluetoothData(jsonObject.toString())
+    }
+
+    override fun startCardRefund(json: String?, token: String) {
+        val jsonObject = JSONObject()
+        jsonObject.put("command", BluetoothCommand.START_CARD_REFUND)
+        jsonObject.put("token", token)
+        jsonObject.put("data", convertToValidJson(json))
+        bluetoothConnectionService.sendBluetoothData(jsonObject.toString())
+    }
 
     override fun startPayment(amount: String?, json: String?) {
         val jsonObject = JSONObject()
@@ -157,8 +184,8 @@ class BluetoothService(private val context: Context) : CommandsInterface {
         bluetoothConnectionService.sendBluetoothData(jsonObject.toString())
     }
 
-    fun setResultListener(paymentResultListener: PaymentResultListener) {
-        bluetoothConnectionService.setResultListener(paymentResultListener)
+    fun setResultDataListener(resultDataListener: ResultDataListener) {
+        bluetoothConnectionService.setResultDataListener(resultDataListener)
     }
 
     private fun convertToValidJson(json: String?): JSONObject? =

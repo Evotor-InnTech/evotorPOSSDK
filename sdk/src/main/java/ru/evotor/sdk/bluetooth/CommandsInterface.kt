@@ -1,6 +1,13 @@
 package ru.evotor.sdk.bluetooth
 
 interface CommandsInterface {
+    fun startCardPayment(json: String?, token: String)
+
+    fun startCardRefund(json: String?, token: String)
+
+
+
+
     fun startPayment(amount: String?, json: String?)
 
     fun startRefund(amount: String?, json: String?)

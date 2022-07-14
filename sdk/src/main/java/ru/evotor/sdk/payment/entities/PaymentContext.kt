@@ -1,9 +1,12 @@
 package ru.evotor.sdk.payment.entities
 
+import android.os.Parcelable
+import kotlinx.android.parcel.Parcelize
 import ru.evotor.sdk.payment.enums.Currency
 import ru.evotor.sdk.payment.enums.PaymentMethod
 import java.math.BigDecimal
 
+@Parcelize
 data class PaymentContext(
     /**
      * Сумма платежа
@@ -58,4 +61,4 @@ data class PaymentContext(
      * Пароль пользователя в системе
      */
     var password: String? = null
-)
+): Parcelable
