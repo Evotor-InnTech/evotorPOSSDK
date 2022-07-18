@@ -102,8 +102,8 @@ class PaymentController(context: Context) {
                         if (device != null && device.name == "CloudPOS") {
                             CoroutineScope(Dispatchers.IO).launch {
                                 bluetoothService.selectBluetoothDevice(device.address, device)
+                                onSuccessHandler(device)
                             }
-                            onSuccessHandler(device)
                         }
                     }
                 }
