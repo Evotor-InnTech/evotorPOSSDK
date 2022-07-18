@@ -36,7 +36,7 @@ class PaymentController(context: Context) {
         login: String,
         password: String,
         successHandler: (String) -> Unit,
-        errorHandler: (String) -> Unit
+        errorHandler: (Exception) -> Unit
     ) {
         CoroutineScope(Dispatchers.IO).launch {
             try {
@@ -49,7 +49,7 @@ class PaymentController(context: Context) {
                 }
             } catch (exception: Exception) {
                 CoroutineScope(Dispatchers.Main).launch {
-                    errorHandler(exception.message.toString())
+                    errorHandler(exception)
                 }
             }
         }
@@ -92,28 +92,35 @@ class PaymentController(context: Context) {
             return
         }
 
-        receiver = object : BroadcastReceiver() {
-            @SuppressLint("MissingPermission")
-            override fun onReceive(context: Context, intent: Intent) {
-                when (intent.action) {
-                    BluetoothDevice.ACTION_FOUND -> {
-                        val device: BluetoothDevice? =
-                            intent.getParcelableExtra(BluetoothDevice.EXTRA_DEVICE)
-                        if (device != null && device.name == "CloudPOS") {
-                            CoroutineScope(Dispatchers.IO).launch {
-                                bluetoothService.selectBluetoothDevice(device.address, device)
-                                onSuccessHandler(device)
+        val pairedDevice = bluetoothService.getPairedDevices().find { it.name == "CloudPOS" }
+        if (pairedDevice != null) {
+            onSuccessHandler(pairedDevice)
+        } else {
+            receiver = object : BroadcastReceiver() {
+                @SuppressLint("MissingPermission")
+                override fun onReceive(context: Context, intent: Intent) {
+                    when (intent.action) {
+                        BluetoothDevice.ACTION_FOUND -> {
+                            val device: BluetoothDevice? =
+                                intent.getParcelableExtra(BluetoothDevice.EXTRA_DEVICE)
+                            if (device != null && device.name == "CloudPOS") {
+                                CoroutineScope(Dispatchers.IO).launch {
+                                    bluetoothService.selectBluetoothDevice(device.address, device)
+                                    CoroutineScope(Dispatchers.Main).launch {
+                                        onSuccessHandler(device)
+                                    }
+                                }
                             }
                         }
                     }
                 }
             }
+
+            bluetoothService.startDiscovery()
+
+            val filter = IntentFilter(BluetoothDevice.ACTION_FOUND)
+            context.registerReceiver(receiver, filter)
         }
-
-        bluetoothService.startDiscovery()
-
-        val filter = IntentFilter(BluetoothDevice.ACTION_FOUND)
-        context.registerReceiver(receiver, filter)
     }
 
     /**
@@ -146,7 +153,8 @@ class PaymentController(context: Context) {
             resultHandler(
                 PaymentResultContext(
                     success = false,
-                    message = "Отсутствует токен"
+                    message = "Отсутствует токен",
+                    code = TOKEN_ERROR_CODE
                 )
             )
         }
@@ -160,6 +168,7 @@ class PaymentController(context: Context) {
                         PaymentResultContext(
                             success = paymentResult.success,
                             message = paymentResult.message,
+                            code = paymentResult.code,
                             data = paymentResult.data
                         )
                     )
@@ -192,7 +201,8 @@ class PaymentController(context: Context) {
             resultHandler(
                 PaymentResultContext(
                     success = false,
-                    message = "Отсутствует токен"
+                    message = "Отсутствует токен",
+                    code = TOKEN_ERROR_CODE
                 )
             )
         }
@@ -206,6 +216,7 @@ class PaymentController(context: Context) {
                         PaymentResultContext(
                             success = paymentResult.success,
                             message = paymentResult.message,
+                            code = paymentResult.code,
                             data = paymentResult.data
                         )
                     )
@@ -237,7 +248,8 @@ class PaymentController(context: Context) {
             resultHandler(
                 PaymentResultContext(
                     success = false,
-                    message = "Отсутствует токен"
+                    message = "Отсутствует токен",
+                    code = TOKEN_ERROR_CODE
                 )
             )
         }
@@ -254,6 +266,7 @@ class PaymentController(context: Context) {
                             PaymentResultContext(
                                 true,
                                 null,
+                                null,
                                 CashResultData(
                                     paymentContext,
                                     response.body()?.transactionId.orEmpty()
@@ -262,14 +275,23 @@ class PaymentController(context: Context) {
                         )
                     }
                 } else {
-                    throw RuntimeException(response.code().toString())
+                    CoroutineScope(Dispatchers.Main).launch {
+                        resultHandler(
+                            PaymentResultContext(
+                                false,
+                                response.message().orEmpty(),
+                                response.code()
+                            )
+                        )
+                    }
                 }
             } catch (exception: Exception) {
                 CoroutineScope(Dispatchers.Main).launch {
                     resultHandler(
                         PaymentResultContext(
                             false,
-                            exception.message.toString()
+                            (exception.localizedMessage ?: exception.message).toString(),
+                            null
                         )
                     )
                 }
@@ -296,7 +318,8 @@ class PaymentController(context: Context) {
             resultHandler(
                 PaymentResultContext(
                     success = false,
-                    message = "Отсутствует токен"
+                    message = "Отсутствует токен",
+                    code = TOKEN_ERROR_CODE
                 )
             )
         }
@@ -313,6 +336,7 @@ class PaymentController(context: Context) {
                             PaymentResultContext(
                                 true,
                                 null,
+                                null,
                                 ReverseCashResultData(
                                     reverseContext
                                 )
@@ -320,14 +344,23 @@ class PaymentController(context: Context) {
                         )
                     }
                 } else {
-                    throw RuntimeException(response.code().toString())
+                    CoroutineScope(Dispatchers.Main).launch {
+                        resultHandler(
+                            PaymentResultContext(
+                                false,
+                                response.message().orEmpty(),
+                                response.code()
+                            )
+                        )
+                    }
                 }
             } catch (exception: Exception) {
                 CoroutineScope(Dispatchers.Main).launch {
                     resultHandler(
                         PaymentResultContext(
                             false,
-                            exception.message.toString()
+                            (exception.localizedMessage ?: exception.message).toString(),
+                            null
                         )
                     )
                 }
@@ -354,7 +387,8 @@ class PaymentController(context: Context) {
             resultHandler(
                 PaymentResultContext(
                     success = false,
-                    message = "Отсутствует токен"
+                    message = "Отсутствует токен",
+                    code = TOKEN_ERROR_CODE
                 )
             )
         }
@@ -374,12 +408,21 @@ class PaymentController(context: Context) {
                 if (response.isSuccessful) {
                     val body = response.body()
                     if (body?.errorMessage != null) {
-                        throw RuntimeException(body.errorMessage.toString())
+                        CoroutineScope(Dispatchers.Main).launch {
+                            resultHandler(
+                                PaymentResultContext(
+                                    false,
+                                    body.errorMessage.toString(),
+                                    response.code()
+                                )
+                            )
+                        }
                     } else {
                         CoroutineScope(Dispatchers.Main).launch {
                             resultHandler(
                                 PaymentResultContext(
                                     response.isSuccessful,
+                                    null,
                                     null,
                                     GiftResultData(
                                         (response.body()?.transactionId ?: 0L).toString(),
@@ -392,14 +435,23 @@ class PaymentController(context: Context) {
                         }
                     }
                 } else {
-                    throw RuntimeException(response.code().toString())
+                    CoroutineScope(Dispatchers.Main).launch {
+                        resultHandler(
+                            PaymentResultContext(
+                                false,
+                                response.message().orEmpty(),
+                                response.code()
+                            )
+                        )
+                    }
                 }
             } catch (exception: Exception) {
                 CoroutineScope(Dispatchers.Main).launch {
                     resultHandler(
                         PaymentResultContext(
                             false,
-                            exception.message.toString()
+                            (exception.localizedMessage ?: exception.message).toString(),
+                            null
                         )
                     )
                 }
@@ -425,7 +477,8 @@ class PaymentController(context: Context) {
             resultHandler(
                 PaymentResultContext(
                     success = false,
-                    message = "Отсутствует токен"
+                    message = "Отсутствует токен",
+                    code = TOKEN_ERROR_CODE
                 )
             )
         }
@@ -444,26 +497,44 @@ class PaymentController(context: Context) {
                 if (response.isSuccessful) {
                     val body = response.body()
                     if (body?.errorMessage != null) {
-                        throw RuntimeException(body.errorMessage.toString())
+                        CoroutineScope(Dispatchers.Main).launch {
+                            resultHandler(
+                                PaymentResultContext(
+                                    false,
+                                    body.errorMessage.toString(),
+                                    response.code()
+                                )
+                            )
+                        }
                     } else {
                         CoroutineScope(Dispatchers.Main).launch {
                             resultHandler(
                                 PaymentResultContext(
                                     response.isSuccessful,
+                                    null,
                                     null
                                 )
                             )
                         }
                     }
                 } else {
-                    throw RuntimeException(response.code().toString())
+                    CoroutineScope(Dispatchers.Main).launch {
+                        resultHandler(
+                            PaymentResultContext(
+                                false,
+                                response.message().orEmpty(),
+                                response.code()
+                            )
+                        )
+                    }
                 }
             } catch (exception: Exception) {
                 CoroutineScope(Dispatchers.Main).launch {
                     resultHandler(
                         PaymentResultContext(
                             false,
-                            exception.message.toString()
+                            (exception.localizedMessage ?: exception.message).toString(),
+                            null
                         )
                     )
                 }
@@ -486,14 +557,14 @@ class PaymentController(context: Context) {
         login: String,
         token: String? = null,
         successHandler: (GiftResult) -> Unit,
-        errorHandler: (String) -> Unit
+        errorHandler: (String, Int?) -> Unit
     ) {
         token?.let {
             sdkToken = it
         }
 
         if (sdkToken == null) {
-            errorHandler("Отсутствует токен")
+            errorHandler("Отсутствует токен", TOKEN_ERROR_CODE)
         }
 
         val resultDataListener = object : ResultDataListener {
@@ -513,7 +584,9 @@ class PaymentController(context: Context) {
                         if (response.isSuccessful) {
                             val body = response.body()
                             if (body?.errorMessage != null) {
-                                throw RuntimeException(body.errorMessage.toString())
+                                CoroutineScope(Dispatchers.Main).launch {
+                                    errorHandler(body.errorMessage.toString(), response.code())
+                                }
                             } else {
                                 CoroutineScope(Dispatchers.Main).launch {
                                     successHandler(
@@ -530,11 +603,16 @@ class PaymentController(context: Context) {
                                 }
                             }
                         } else {
-                            throw RuntimeException(response.code().toString())
+                            CoroutineScope(Dispatchers.Main).launch {
+                                errorHandler(response.message().orEmpty(), response.code())
+                            }
                         }
                     } catch (exception: Exception) {
                         CoroutineScope(Dispatchers.Main).launch {
-                            errorHandler(exception.message.toString())
+                            errorHandler(
+                                (exception.localizedMessage ?: exception.message).toString(),
+                                null
+                            )
                         }
                     }
                 }
@@ -546,4 +624,8 @@ class PaymentController(context: Context) {
     }
 
     fun getBluetoothService() = bluetoothService
+
+    private companion object {
+        const val TOKEN_ERROR_CODE = 401
+    }
 }
