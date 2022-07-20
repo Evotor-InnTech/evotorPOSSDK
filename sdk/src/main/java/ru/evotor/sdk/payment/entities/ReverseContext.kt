@@ -3,6 +3,7 @@ package ru.evotor.sdk.payment.entities
 import android.os.Parcelable
 import kotlinx.android.parcel.Parcelize
 import ru.evotor.sdk.payment.enums.Currency
+import ru.evotor.sdk.payment.enums.PaymentMethod
 import ru.evotor.sdk.payment.enums.ReverseAction
 import java.math.BigDecimal
 
@@ -72,11 +73,28 @@ data class ReverseContext(
      */
     var acquirerCode: String? = null,
     /**
+     * Способ оплаты
+     */
+    var method: PaymentMethod? = null,
+    /**
      * Логин пользователя в системе
      */
     var login: String? = null,
     /**
      * Пароль пользователя в системе
      */
-    var password: String? = null
+    var password: String? = null,
+
+
+
+
+    //Обязательные данные для оплаты ПК, берется после запроса баланса с пинпада
+    /**
+     * Логин пользователя в системе
+     */
+    var loyaltyNumber: String? = null,
+    /**
+     * Пароль пользователя в системе
+     */
+    var tid: String? = null,
 ): Parcelable

@@ -6,7 +6,6 @@ import java.math.BigDecimal
 data class GiftCardActivationContext(
     val loyalty_number: String,
     val tid: String,
-    val login: String,
     val amount: BigDecimal?,
     val transactionId: String? = null
 )

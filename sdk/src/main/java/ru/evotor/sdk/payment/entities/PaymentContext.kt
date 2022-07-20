@@ -60,5 +60,17 @@ data class PaymentContext(
     /**
      * Пароль пользователя в системе
      */
-    var password: String? = null
+    var password: String? = null,
+
+
+
+    //Обязательные данные для оплаты ПК, берется после запроса баланса с пинпада
+    /**
+     * Логин пользователя в системе
+     */
+    var loyaltyNumber: String? = null,
+    /**
+     * Пароль пользователя в системе
+     */
+    var tid: String? = null,
 ): Parcelable

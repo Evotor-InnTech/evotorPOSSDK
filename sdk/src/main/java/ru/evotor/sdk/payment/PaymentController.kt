@@ -19,8 +19,10 @@ import ru.evotor.sdk.api.RetrofitService
 import ru.evotor.sdk.bluetooth.BluetoothService
 import ru.evotor.sdk.payment.entities.*
 import ru.evotor.sdk.payment.enums.Currency
+import ru.evotor.sdk.payment.enums.PaymentMethod
 import java.math.BigDecimal
 import java.util.*
+import kotlin.math.log
 
 class PaymentController(context: Context) {
 
@@ -28,19 +30,30 @@ class PaymentController(context: Context) {
     private val retrofitService: RetrofitService = RetrofitCommon.retrofitService
 
     private var sdkToken: String? = null
+    private var login: String? = null
+    private var password: String? = null
+
+    /**
+     * Сохранение логина и пароля
+     */
+    fun setCredentials(
+        login: String,
+        password: String
+    ) {
+        this.login = login
+        this.password = password
+    }
 
     /**
      * Получение токена
      */
-    fun setCredentials(
-        login: String,
-        password: String,
+    fun auth(
         successHandler: (String) -> Unit,
         errorHandler: (Exception) -> Unit
     ) {
         CoroutineScope(Dispatchers.IO).launch {
             try {
-                val response = retrofitService.getToken(login, password)
+                val response = retrofitService.getToken(login.orEmpty(), password.orEmpty())
                 if (response.isSuccessful) {
                     sdkToken = response.body()?.string()
                     successHandler(sdkToken.orEmpty())
@@ -131,10 +144,7 @@ class PaymentController(context: Context) {
     }
 
     /**
-     * Начинает выполнение платежа. При неверных параметрах
-    платежа или при попытке начать новый платеж/отмену
-    платежа до окончания будет сгенерировано исключение
-    PaymentException
+     * Начинает выполнение платежа по карте, наличке и ПК
      *
      * @param paymentContext - данные платежа
      * @return PaymentResultData - все данные по транзакции
@@ -159,6 +169,31 @@ class PaymentController(context: Context) {
             )
         }
 
+        val currentPaymentContext = paymentContext.copy(
+            login = login,
+            password = password
+        )
+
+        when (paymentContext.method) {
+            PaymentMethod.CARD -> {
+                cardPaymentProcess(currentPaymentContext, resultHandler)
+            }
+            PaymentMethod.CASH -> {
+                cashPaymentProcess(currentPaymentContext, resultHandler)
+            }
+            PaymentMethod.LINKED_CARD -> {
+                giftPaymentProcess(currentPaymentContext, resultHandler)
+            }
+        }
+    }
+
+    /**
+     * Оплата картой
+     */
+    private fun cardPaymentProcess(
+        paymentContext: PaymentContext,
+        resultHandler: (PaymentResultContext) -> Unit
+    ) {
         val resultDataListener = object : ResultDataListener {
             override fun onResult(data: String) {
                 CoroutineScope(Dispatchers.Main).launch {
@@ -181,79 +216,12 @@ class PaymentController(context: Context) {
     }
 
     /**
-     * Начинает выполнение возврата/отмены платежа. При попытке
-    начать новый платеж/отмену платежа до окончания будет
-    сгенерировано исключение PaymentException
-     *
-     * @param reverseContext - данные для проведения отмены/возврата
+     * Оплата наличкой
      */
-    @Throws(PaymentException::class)
-    fun cancelPayment(
-        reverseContext: ReverseContext,
-        token: String? = null,
-        resultHandler: (PaymentResultContext) -> Unit
-    ) {
-        token?.let {
-            sdkToken = it
-        }
-
-        if (sdkToken == null) {
-            resultHandler(
-                PaymentResultContext(
-                    success = false,
-                    message = "Отсутствует токен",
-                    code = TOKEN_ERROR_CODE
-                )
-            )
-        }
-
-        val resultDataListener = object : ResultDataListener {
-            override fun onResult(data: String) {
-                CoroutineScope(Dispatchers.Main).launch {
-                    val paymentResult =
-                        Gson().fromJson(data, CardRefundResultContext::class.java)
-                    resultHandler(
-                        PaymentResultContext(
-                            success = paymentResult.success,
-                            message = paymentResult.message,
-                            code = paymentResult.code,
-                            data = paymentResult.data
-                        )
-                    )
-                }
-            }
-        }
-
-        bluetoothService.setResultDataListener(resultDataListener)
-        bluetoothService.startCardRefund(Gson().toJson(reverseContext), sdkToken.orEmpty())
-    }
-
-    /**
-     * Начинает выполнение платежа наличкой
-     *
-     * @param paymentContext - данные платежа
-     * @return PaymentResultData - все данные по транзакции
-     */
-    @Throws(PaymentException::class)
-    fun startCash(
+    private fun cashPaymentProcess(
         paymentContext: PaymentContext,
-        token: String? = null,
         resultHandler: (PaymentResultContext) -> Unit
     ) {
-        token?.let {
-            sdkToken = it
-        }
-
-        if (sdkToken == null) {
-            resultHandler(
-                PaymentResultContext(
-                    success = false,
-                    message = "Отсутствует токен",
-                    code = TOKEN_ERROR_CODE
-                )
-            )
-        }
-
         CoroutineScope(Dispatchers.IO).launch {
             try {
                 val response = retrofitService.sendCash(
@@ -300,12 +268,85 @@ class PaymentController(context: Context) {
     }
 
     /**
-     * Начинает выполнение возврата/отмены платежа наличкой
+     * Оплата ПК
+     */
+    private fun giftPaymentProcess(
+        paymentContext: PaymentContext,
+        resultHandler: (PaymentResultContext) -> Unit
+    ) {
+        CoroutineScope(Dispatchers.IO).launch {
+            try {
+                val response = retrofitService.sendGift(
+                    sdkToken.orEmpty(),
+                    GiftActivationBody(
+                        loyaltyNumber = paymentContext.loyaltyNumber.orEmpty(),
+                        tid = paymentContext.tid.orEmpty(),
+                        login = login.orEmpty(),
+                        amount = paymentContext.amount ?: BigDecimal.ONE,
+                        paymentProductTextData = paymentContext.paymentProductTextData
+                    )
+                )
+                if (response.isSuccessful) {
+                    val body = response.body()
+                    if (body?.errorMessage != null) {
+                        CoroutineScope(Dispatchers.Main).launch {
+                            resultHandler(
+                                PaymentResultContext(
+                                    false,
+                                    body.errorMessage.toString(),
+                                    response.code()
+                                )
+                            )
+                        }
+                    } else {
+                        CoroutineScope(Dispatchers.Main).launch {
+                            resultHandler(
+                                PaymentResultContext(
+                                    response.isSuccessful,
+                                    null,
+                                    null,
+                                    GiftResultData(
+                                        (response.body()?.transactionId ?: 0L).toString(),
+                                        paymentContext.tid.orEmpty(),
+                                        paymentContext.loyaltyNumber.orEmpty(),
+                                        paymentContext.amount ?: BigDecimal.ONE,
+                                    )
+                                )
+                            )
+                        }
+                    }
+                } else {
+                    CoroutineScope(Dispatchers.Main).launch {
+                        resultHandler(
+                            PaymentResultContext(
+                                false,
+                                response.message().orEmpty(),
+                                response.code()
+                            )
+                        )
+                    }
+                }
+            } catch (exception: Exception) {
+                CoroutineScope(Dispatchers.Main).launch {
+                    resultHandler(
+                        PaymentResultContext(
+                            false,
+                            (exception.localizedMessage ?: exception.message).toString(),
+                            null
+                        )
+                    )
+                }
+            }
+        }
+    }
+
+    /**
+     * Начинает выполнение возврата/отмены платежа
      *
      * @param reverseContext - данные для проведения отмены/возврата
      */
     @Throws(PaymentException::class)
-    fun cancelCash(
+    fun cancelPayment(
         reverseContext: ReverseContext,
         token: String? = null,
         resultHandler: (PaymentResultContext) -> Unit
@@ -324,6 +365,59 @@ class PaymentController(context: Context) {
             )
         }
 
+        val currentReverseContext = reverseContext.copy(
+            login = login,
+            password = password
+        )
+
+        when (currentReverseContext.method) {
+            PaymentMethod.CARD -> {
+                cancelCardPayment(currentReverseContext, resultHandler)
+            }
+            PaymentMethod.CASH -> {
+                cancelCashPayment(currentReverseContext, resultHandler)
+            }
+            PaymentMethod.LINKED_CARD -> {
+                cancelGiftPayment(currentReverseContext, resultHandler)
+            }
+        }
+    }
+
+    /**
+     * Отмена платежа по карте
+     */
+    private fun cancelCardPayment(
+        reverseContext: ReverseContext,
+        resultHandler: (PaymentResultContext) -> Unit
+    ) {
+        val resultDataListener = object : ResultDataListener {
+            override fun onResult(data: String) {
+                CoroutineScope(Dispatchers.Main).launch {
+                    val paymentResult =
+                        Gson().fromJson(data, CardRefundResultContext::class.java)
+                    resultHandler(
+                        PaymentResultContext(
+                            success = paymentResult.success,
+                            message = paymentResult.message,
+                            code = paymentResult.code,
+                            data = paymentResult.data
+                        )
+                    )
+                }
+            }
+        }
+
+        bluetoothService.setResultDataListener(resultDataListener)
+        bluetoothService.startCardRefund(Gson().toJson(reverseContext), sdkToken.orEmpty())
+    }
+
+    /**
+     * Отмена платежа по наличке
+     */
+    private fun cancelCashPayment(
+        reverseContext: ReverseContext,
+        resultHandler: (PaymentResultContext) -> Unit
+    ) {
         CoroutineScope(Dispatchers.IO).launch {
             try {
                 val response = retrofitService.reverseCash(
@@ -369,129 +463,21 @@ class PaymentController(context: Context) {
     }
 
     /**
-     * Начинает выполнение активации подарочной карты.
-     *
-     * @param giftCardActivationContext - данные для проведения активации подарочной карты
+     * Отмена платежа по ПК
      */
-    fun giftCardActivate(
-        giftCardActivationContext: GiftCardActivationContext,
-        paymentProductTextData: Map<String, String>? = null,
-        token: String? = null,
+    private fun cancelGiftPayment(
+        reverseContext: ReverseContext,
         resultHandler: (PaymentResultContext) -> Unit
     ) {
-        token?.let {
-            sdkToken = it
-        }
-
-        if (sdkToken == null) {
-            resultHandler(
-                PaymentResultContext(
-                    success = false,
-                    message = "Отсутствует токен",
-                    code = TOKEN_ERROR_CODE
-                )
-            )
-        }
-
-        CoroutineScope(Dispatchers.IO).launch {
-            try {
-                val response = retrofitService.sendGift(
-                    sdkToken.orEmpty(),
-                    GiftActivationBody(
-                        loyaltyNumber = giftCardActivationContext.loyalty_number,
-                        tid = giftCardActivationContext.tid,
-                        login = giftCardActivationContext.login,
-                        amount = giftCardActivationContext.amount ?: BigDecimal.ZERO,
-                        paymentProductTextData = paymentProductTextData
-                    )
-                )
-                if (response.isSuccessful) {
-                    val body = response.body()
-                    if (body?.errorMessage != null) {
-                        CoroutineScope(Dispatchers.Main).launch {
-                            resultHandler(
-                                PaymentResultContext(
-                                    false,
-                                    body.errorMessage.toString(),
-                                    response.code()
-                                )
-                            )
-                        }
-                    } else {
-                        CoroutineScope(Dispatchers.Main).launch {
-                            resultHandler(
-                                PaymentResultContext(
-                                    response.isSuccessful,
-                                    null,
-                                    null,
-                                    GiftResultData(
-                                        (response.body()?.transactionId ?: 0L).toString(),
-                                        giftCardActivationContext.tid,
-                                        giftCardActivationContext.loyalty_number,
-                                        giftCardActivationContext.amount ?: BigDecimal.ONE
-                                    )
-                                )
-                            )
-                        }
-                    }
-                } else {
-                    CoroutineScope(Dispatchers.Main).launch {
-                        resultHandler(
-                            PaymentResultContext(
-                                false,
-                                response.message().orEmpty(),
-                                response.code()
-                            )
-                        )
-                    }
-                }
-            } catch (exception: Exception) {
-                CoroutineScope(Dispatchers.Main).launch {
-                    resultHandler(
-                        PaymentResultContext(
-                            false,
-                            (exception.localizedMessage ?: exception.message).toString(),
-                            null
-                        )
-                    )
-                }
-            }
-        }
-    }
-
-    /**
-     * Начинает выполнение деактивации подарочной карты.
-     *
-     * @param giftCardActivationContext - данные для проведения деактивации подарочной карты
-     */
-    fun giftCardDeactivate(
-        giftCardActivationContext: GiftCardActivationContext,
-        token: String? = null,
-        resultHandler: (PaymentResultContext) -> Unit
-    ) {
-        token?.let {
-            sdkToken = it
-        }
-
-        if (sdkToken == null) {
-            resultHandler(
-                PaymentResultContext(
-                    success = false,
-                    message = "Отсутствует токен",
-                    code = TOKEN_ERROR_CODE
-                )
-            )
-        }
-
         CoroutineScope(Dispatchers.IO).launch {
             try {
                 val response = retrofitService.cancelGift(
                     sdkToken.orEmpty(),
                     GiftCancelBody(
-                        loyalty_number = giftCardActivationContext.loyalty_number,
-                        tid = giftCardActivationContext.tid,
-                        login = giftCardActivationContext.login,
-                        transactionId = giftCardActivationContext.transactionId.orEmpty()
+                        loyalty_number = reverseContext.loyaltyNumber.orEmpty(),
+                        tid = reverseContext.tid.orEmpty(),
+                        login = login.orEmpty(),
+                        transactionId = reverseContext.transactionID.orEmpty()
                     )
                 )
                 if (response.isSuccessful) {
@@ -554,7 +540,6 @@ class PaymentController(context: Context) {
      */
     @Throws(PaymentException::class)
     fun balanceInquiry(
-        login: String,
         token: String? = null,
         successHandler: (GiftResult) -> Unit,
         errorHandler: (String, Int?) -> Unit
@@ -578,7 +563,7 @@ class PaymentController(context: Context) {
                             GiftBalanceBody(
                                 loyaltyNumber = resultData.LOYALTY_NUMBER.orEmpty(),
                                 tid = resultData.TID.orEmpty(),
-                                login = login
+                                login = login.orEmpty()
                             )
                         )
                         if (response.isSuccessful) {
@@ -594,9 +579,7 @@ class PaymentController(context: Context) {
                                             loyaltyCardTrack = resultData.LOYALTY_NUMBER.orEmpty(),
                                             tid = resultData.TID.orEmpty(),
                                             balance = response.body()?.balance?.divide(
-                                                BigDecimal(
-                                                    100
-                                                )
+                                                BigDecimal(100)
                                             ) ?: BigDecimal.ZERO
                                         )
                                     )
