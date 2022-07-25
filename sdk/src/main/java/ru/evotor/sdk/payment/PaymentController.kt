@@ -40,6 +40,10 @@ class PaymentController(context: Context) {
         login: String,
         password: String
     ) {
+        if (!this.login.equals(login) || !this.password.equals(password)) {
+            this.sdkToken = null
+        }
+
         this.login = login
         this.password = password
     }
@@ -140,7 +144,9 @@ class PaymentController(context: Context) {
      * Завершает работу со считывателем карт
      */
     fun disable(context: Context) {
-        context.unregisterReceiver(receiver)
+        receiver.let {
+            context.unregisterReceiver(receiver)
+        }
     }
 
     /**
@@ -152,23 +158,23 @@ class PaymentController(context: Context) {
     @Throws(PaymentException::class)
     fun startPayment(
         paymentContext: PaymentContext,
-        token: String? = null,
         resultHandler: (PaymentResultContext) -> Unit
     ) {
-        token?.let {
-            sdkToken = it
-        }
-
         if (sdkToken == null) {
-            resultHandler(
-                PaymentResultContext(
-                    success = false,
-                    message = "Отсутствует токен",
-                    code = TOKEN_ERROR_CODE
-                )
-            )
+            auth({
+                paymentProcess(paymentContext, resultHandler)
+            }, {
+                resultHandler(PaymentResultContext(false, it.message.toString(), null))
+            })
+        } else {
+            paymentProcess(paymentContext, resultHandler)
         }
+    }
 
+    private fun paymentProcess(
+        paymentContext: PaymentContext,
+        resultHandler: (PaymentResultContext) -> Unit
+    ) {
         val currentPaymentContext = paymentContext.copy(
             login = login,
             password = password
@@ -348,23 +354,23 @@ class PaymentController(context: Context) {
     @Throws(PaymentException::class)
     fun cancelPayment(
         reverseContext: ReverseContext,
-        token: String? = null,
         resultHandler: (PaymentResultContext) -> Unit
     ) {
-        token?.let {
-            sdkToken = it
-        }
-
         if (sdkToken == null) {
-            resultHandler(
-                PaymentResultContext(
-                    success = false,
-                    message = "Отсутствует токен",
-                    code = TOKEN_ERROR_CODE
-                )
-            )
+            auth({
+                cancelProcess(reverseContext, resultHandler)
+            }, {
+                resultHandler(PaymentResultContext(false, it.message.toString(), null))
+            })
+        } else {
+            cancelProcess(reverseContext, resultHandler)
         }
+    }
 
+    private fun cancelProcess(
+        reverseContext: ReverseContext,
+        resultHandler: (PaymentResultContext) -> Unit
+    ) {
         val currentReverseContext = reverseContext.copy(
             login = login,
             password = password
@@ -540,18 +546,24 @@ class PaymentController(context: Context) {
      */
     @Throws(PaymentException::class)
     fun balanceInquiry(
-        token: String? = null,
         successHandler: (GiftResult) -> Unit,
         errorHandler: (String, Int?) -> Unit
     ) {
-        token?.let {
-            sdkToken = it
-        }
-
         if (sdkToken == null) {
-            errorHandler("Отсутствует токен", TOKEN_ERROR_CODE)
+            auth({
+                balanceProcess(successHandler, errorHandler)
+            }, {
+                errorHandler(it.message.toString(), null)
+            })
+        } else {
+            balanceProcess(successHandler, errorHandler)
         }
+    }
 
+    private fun balanceProcess(
+        successHandler: (GiftResult) -> Unit,
+        errorHandler: (String, Int?) -> Unit
+    ) {
         val resultDataListener = object : ResultDataListener {
             override fun onResult(data: String) {
                 CoroutineScope(Dispatchers.IO).launch {
@@ -607,8 +619,4 @@ class PaymentController(context: Context) {
     }
 
     fun getBluetoothService() = bluetoothService
-
-    private companion object {
-        const val TOKEN_ERROR_CODE = 401
-    }
 }
