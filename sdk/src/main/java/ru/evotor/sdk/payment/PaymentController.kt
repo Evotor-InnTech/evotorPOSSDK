@@ -111,7 +111,12 @@ class PaymentController(context: Context) {
 
         val pairedDevice = bluetoothService.getPairedDevices().find { it.name == "CloudPOS" }
         if (pairedDevice != null) {
-            onSuccessHandler(pairedDevice)
+            CoroutineScope(Dispatchers.IO).launch {
+                bluetoothService.selectBluetoothDevice(pairedDevice.address, pairedDevice)
+                CoroutineScope(Dispatchers.Main).launch {
+                    onSuccessHandler(pairedDevice)
+                }
+            }
         } else {
             receiver = object : BroadcastReceiver() {
                 @SuppressLint("MissingPermission")
@@ -144,8 +149,9 @@ class PaymentController(context: Context) {
      * Завершает работу со считывателем карт
      */
     fun disable(context: Context) {
-        receiver.let {
+        try {
             context.unregisterReceiver(receiver)
+        } catch (exception: Exception) {
         }
     }
 
