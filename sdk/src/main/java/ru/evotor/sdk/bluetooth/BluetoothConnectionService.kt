@@ -62,6 +62,28 @@ class BluetoothConnectionService(private val context: Context) {
     suspend fun connect() {
         bluetoothAdapter?.cancelDiscovery()
 
+        initSocket()
+
+        try {
+            socket?.connect()
+        } catch (exception: Exception) {
+            socket?.close()
+            initSocket()
+            socket?.connect()
+        }
+
+        socket?.let { clientSocket ->
+            //Socket connected
+            Log.e(TAG, "Bluetooth socket connected")
+            connectionActive.set(true)
+            showConnectionStatus()
+            // Start endless reading
+            readSocketInput(clientSocket)
+        }
+    }
+
+    @SuppressLint("MissingPermission")
+    private suspend fun initSocket() {
         if (bluetoothDevice != null) {
             socket = bluetoothDevice?.createRfcommSocketToServiceRecord(
                 UUID.fromString(
@@ -77,17 +99,6 @@ class BluetoothConnectionService(private val context: Context) {
                         )
                     )
             }
-        }
-
-        socket?.connect()
-
-        socket?.let { clientSocket ->
-            //Socket connected
-            Log.e(TAG, "Bluetooth socket connected")
-            connectionActive.set(true)
-            showConnectionStatus()
-            // Start endless reading
-            readSocketInput(clientSocket)
         }
     }
 
@@ -142,5 +153,4 @@ class BluetoothConnectionService(private val context: Context) {
     private suspend fun getPairedDeviceByAddress(address: String): BluetoothDevice =
         bluetoothAdapter?.bondedDevices?.find { it.address == address }
             ?: throw RuntimeException("Has not paired device with this address")
-
 }
