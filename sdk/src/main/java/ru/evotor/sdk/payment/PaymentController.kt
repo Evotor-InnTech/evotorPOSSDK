@@ -9,6 +9,7 @@ import android.content.Intent
 import android.content.IntentFilter
 import android.content.pm.PackageManager
 import android.os.Build
+import android.provider.Settings
 import androidx.core.content.ContextCompat
 import com.google.gson.Gson
 import kotlinx.coroutines.CoroutineScope
@@ -24,7 +25,7 @@ import java.math.BigDecimal
 import java.util.*
 import kotlin.math.log
 
-class PaymentController(context: Context) {
+class PaymentController(private val context: Context) {
 
     private val bluetoothService: BluetoothService = BluetoothService(context)
     private val retrofitService: RetrofitService = RetrofitCommon.retrofitService
@@ -78,7 +79,6 @@ class PaymentController(context: Context) {
      * Начинает работу со считывателем карт
      */
     fun enable(
-        context: Context,
         onSuccessHandler: (BluetoothDevice) -> Unit,
         errorHandler: (String) -> Unit
     ) {
@@ -148,7 +148,7 @@ class PaymentController(context: Context) {
     /**
      * Завершает работу со считывателем карт
      */
-    fun disable(context: Context) {
+    fun disable() {
         try {
             context.unregisterReceiver(receiver)
         } catch (exception: Exception) {
@@ -223,8 +223,19 @@ class PaymentController(context: Context) {
             }
         }
 
+        var currentPaymentContext = paymentContext
+        currentPaymentContext = currentPaymentContext.copy(
+            deviceAppBuild = "1.0.0",
+            deviceId = Settings.Secure.getString(
+                context.contentResolver,
+                Settings.Secure.ANDROID_ID
+            ),
+            deviceModel = Build.MANUFACTURER,
+            deviceName = Build.MODEL
+        )
+
         bluetoothService.setResultDataListener(resultDataListener)
-        bluetoothService.startCardPayment(Gson().toJson(paymentContext), sdkToken.orEmpty())
+        bluetoothService.startCardPayment(Gson().toJson(currentPaymentContext), sdkToken.orEmpty())
     }
 
     /**
@@ -419,8 +430,19 @@ class PaymentController(context: Context) {
             }
         }
 
+        var currentReverseContext = reverseContext
+        currentReverseContext = currentReverseContext.copy(
+            deviceAppBuild = "1.0.0",
+            deviceId = Settings.Secure.getString(
+                context.contentResolver,
+                Settings.Secure.ANDROID_ID
+            ),
+            deviceModel = Build.MANUFACTURER,
+            deviceName = Build.MODEL
+        )
+
         bluetoothService.setResultDataListener(resultDataListener)
-        bluetoothService.startCardRefund(Gson().toJson(reverseContext), sdkToken.orEmpty())
+        bluetoothService.startCardRefund(Gson().toJson(currentReverseContext), sdkToken.orEmpty())
     }
 
     /**

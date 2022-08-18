@@ -73,4 +73,10 @@ data class PaymentContext(
      * Пароль пользователя в системе
      */
     var tid: String? = null,
+
+    //device info
+    val deviceAppBuild: String? = null,
+    val deviceId: String? = null,
+    val deviceModel: String? = null,
+    val deviceName: String? = null
 ): Parcelable
