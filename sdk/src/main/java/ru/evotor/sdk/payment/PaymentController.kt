@@ -125,7 +125,10 @@ class PaymentController(private val context: Context) {
                         BluetoothDevice.ACTION_FOUND -> {
                             val device: BluetoothDevice? =
                                 intent.getParcelableExtra(BluetoothDevice.EXTRA_DEVICE)
-                            if (device != null && device.name == "CloudPOS") {
+                            if (device != null &&
+                                (device.name.equals("CloudPOS", ignoreCase = true) ||
+                                        device.name.equals("WIZARPOS_Q3", ignoreCase = true))
+                            ) {
                                 CoroutineScope(Dispatchers.IO).launch {
                                     bluetoothService.selectBluetoothDevice(device.address, device)
                                     CoroutineScope(Dispatchers.Main).launch {
@@ -209,8 +212,16 @@ class PaymentController(private val context: Context) {
         val resultDataListener = object : ResultDataListener {
             override fun onResult(data: String) {
                 CoroutineScope(Dispatchers.Main).launch {
-                    val paymentResult =
+                    var paymentResult =
                         Gson().fromJson(data, CardPaymentResultContext::class.java)
+                    paymentResult = paymentResult.copy(
+                        data = paymentResult.data?.copy(
+                            data = paymentResult.data?.data?.copy(
+                                amount = BigDecimal(paymentResult.data?.data?.amount ?: "0").divide(BigDecimal(100)).toPlainString(),
+                                amountClear = BigDecimal(paymentResult.data?.data?.amountClear ?: "0").divide(BigDecimal(100)).toPlainString()
+                            ) ?: throw RuntimeException("data is null")
+                        )
+                    )
                     resultHandler(
                         PaymentResultContext(
                             success = paymentResult.success,
@@ -416,8 +427,16 @@ class PaymentController(private val context: Context) {
         val resultDataListener = object : ResultDataListener {
             override fun onResult(data: String) {
                 CoroutineScope(Dispatchers.Main).launch {
-                    val paymentResult =
+                    var paymentResult =
                         Gson().fromJson(data, CardRefundResultContext::class.java)
+                    paymentResult = paymentResult.copy(
+                        data = paymentResult.data?.copy(
+                            data = paymentResult.data?.data?.copy(
+                                amount = BigDecimal(paymentResult.data?.data?.amount ?: "0").divide(BigDecimal(100)).toPlainString(),
+                                amountClear = BigDecimal(paymentResult.data?.data?.amountClear ?: "0").divide(BigDecimal(100)).toPlainString()
+                            ) ?: throw RuntimeException("data is null")
+                        )
+                    )
                     resultHandler(
                         PaymentResultContext(
                             success = paymentResult.success,
