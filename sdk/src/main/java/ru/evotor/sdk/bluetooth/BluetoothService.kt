@@ -51,7 +51,6 @@ class BluetoothService(private val context: Context) : CommandsInterface {
         ) {
             onSuccess()
         } else {
-
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
                 bluetoothPermission.launch(
                     arrayOf(

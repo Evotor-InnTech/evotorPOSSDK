@@ -139,7 +139,7 @@ class BluetoothConnectionService(private val context: Context) {
     fun sendBluetoothData(data: String) {
         try {
             socket?.outputStream?.write(data.toByteArray())
-        } catch (e: java.lang.Exception) {
+        } catch (exception: Exception) {
             connectionActive.set(false)
             socket?.close()
         }

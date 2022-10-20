@@ -112,9 +112,15 @@ class PaymentController(private val context: Context) {
         val pairedDevice = bluetoothService.getPairedDevices().find { it.name == "CloudPOS" }
         if (pairedDevice != null) {
             CoroutineScope(Dispatchers.IO).launch {
-                bluetoothService.selectBluetoothDevice(pairedDevice.address, pairedDevice)
-                CoroutineScope(Dispatchers.Main).launch {
-                    onSuccessHandler(pairedDevice)
+                try {
+                    bluetoothService.selectBluetoothDevice(pairedDevice.address, pairedDevice)
+                    CoroutineScope(Dispatchers.Main).launch {
+                        onSuccessHandler(pairedDevice)
+                    }
+                } catch (exception: Exception) {
+                    CoroutineScope(Dispatchers.Main).launch {
+                        errorHandler(exception.message.toString())
+                    }
                 }
             }
         } else {
@@ -130,11 +136,18 @@ class PaymentController(private val context: Context) {
                                         device.name.equals("WIZARPOS_Q3", ignoreCase = true))
                             ) {
                                 CoroutineScope(Dispatchers.IO).launch {
-                                    bluetoothService.selectBluetoothDevice(device.address, device)
-                                    CoroutineScope(Dispatchers.Main).launch {
-                                        onSuccessHandler(device)
+                                    try {
+                                        bluetoothService.selectBluetoothDevice(device.address, device)
+                                        CoroutineScope(Dispatchers.Main).launch {
+                                            onSuccessHandler(device)
+                                        }
+                                    } catch (exception: Exception) {
+                                        CoroutineScope(Dispatchers.Main).launch {
+                                            errorHandler(exception.message.toString())
+                                        }
                                     }
                                 }
+                            } else {
                             }
                         }
                     }
