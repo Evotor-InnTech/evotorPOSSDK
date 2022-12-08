@@ -12,6 +12,7 @@ import android.os.Build
 import android.util.Log
 import androidx.activity.result.ActivityResultLauncher
 import androidx.core.content.ContextCompat
+import com.google.firebase.crashlytics.FirebaseCrashlytics
 import org.json.JSONObject
 import ru.evotor.sdk.payment.ResultDataListener
 
@@ -78,6 +79,7 @@ class BluetoothService(private val context: Context) : CommandsInterface {
         onSuccess: () -> Unit
     ) {
         if (bluetoothAdapter == null) {
+            FirebaseCrashlytics.getInstance().recordException(RuntimeException("Device not have Bluetooth"))
             Log.e(BluetoothService::class.java.toString(), "Device not have Bluetooth")
             return
         }

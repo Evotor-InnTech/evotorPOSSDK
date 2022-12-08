@@ -10,7 +10,9 @@ import android.content.IntentFilter
 import android.content.pm.PackageManager
 import android.os.Build
 import android.provider.Settings
+import android.util.Log
 import androidx.core.content.ContextCompat
+import com.google.firebase.crashlytics.FirebaseCrashlytics
 import com.google.gson.Gson
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -66,6 +68,7 @@ class PaymentController(private val context: Context) {
                     throw RuntimeException(response.code().toString())
                 }
             } catch (exception: Exception) {
+                FirebaseCrashlytics.getInstance().recordException(exception)
                 CoroutineScope(Dispatchers.Main).launch {
                     errorHandler(exception)
                 }
@@ -137,7 +140,10 @@ class PaymentController(private val context: Context) {
                             ) {
                                 CoroutineScope(Dispatchers.IO).launch {
                                     try {
-                                        bluetoothService.selectBluetoothDevice(device.address, device)
+                                        bluetoothService.selectBluetoothDevice(
+                                            device.address,
+                                            device
+                                        )
                                         CoroutineScope(Dispatchers.Main).launch {
                                             onSuccessHandler(device)
                                         }
@@ -148,6 +154,8 @@ class PaymentController(private val context: Context) {
                                     }
                                 }
                             } else {
+                                FirebaseCrashlytics.getInstance()
+                                    .recordException(RuntimeException("Bad device name"))
                             }
                         }
                     }
@@ -168,6 +176,7 @@ class PaymentController(private val context: Context) {
         try {
             context.unregisterReceiver(receiver)
         } catch (exception: Exception) {
+            FirebaseCrashlytics.getInstance().recordException(exception)
         }
     }
 
@@ -230,9 +239,23 @@ class PaymentController(private val context: Context) {
                     paymentResult = paymentResult.copy(
                         data = paymentResult.data?.copy(
                             data = paymentResult.data?.data?.copy(
-                                amount = BigDecimal(paymentResult.data?.data?.amount ?: "0").divide(BigDecimal(100)).toPlainString(),
-                                amountClear = BigDecimal(paymentResult.data?.data?.amountClear ?: "0").divide(BigDecimal(100)).toPlainString()
+                                amount = BigDecimal(paymentResult.data?.data?.amount ?: "0").divide(
+                                    BigDecimal(100)
+                                ).toPlainString(),
+                                amountClear = BigDecimal(
+                                    paymentResult.data?.data?.amountClear ?: "0"
+                                ).divide(BigDecimal(100)).toPlainString()
                             ) ?: throw RuntimeException("data is null")
+                        )
+                    )
+                    Log.d(
+                        "PaymentController", "cardPaymentProcess: " + Gson().toJson(
+                            PaymentResultContext(
+                                success = paymentResult.success,
+                                message = paymentResult.message,
+                                code = paymentResult.code,
+                                data = paymentResult.data
+                            )
                         )
                     )
                     resultHandler(
@@ -277,6 +300,19 @@ class PaymentController(private val context: Context) {
                 )
                 if (response.isSuccessful) {
                     CoroutineScope(Dispatchers.Main).launch {
+                        Log.d(
+                            "PaymentController", "cashPaymentProcess_success: " + Gson().toJson(
+                                PaymentResultContext(
+                                    true,
+                                    null,
+                                    null,
+                                    CashResultData(
+                                        paymentContext,
+                                        response.body()?.transactionId.orEmpty()
+                                    )
+                                )
+                            )
+                        )
                         resultHandler(
                             PaymentResultContext(
                                 true,
@@ -291,6 +327,15 @@ class PaymentController(private val context: Context) {
                     }
                 } else {
                     CoroutineScope(Dispatchers.Main).launch {
+                        Log.d(
+                            "PaymentController", "cashPaymentProcess_error: " + Gson().toJson(
+                                PaymentResultContext(
+                                    false,
+                                    response.message().orEmpty(),
+                                    response.code()
+                                )
+                            )
+                        )
                         resultHandler(
                             PaymentResultContext(
                                 false,
@@ -301,7 +346,17 @@ class PaymentController(private val context: Context) {
                     }
                 }
             } catch (exception: Exception) {
+                FirebaseCrashlytics.getInstance().recordException(exception)
                 CoroutineScope(Dispatchers.Main).launch {
+                    Log.d(
+                        "PaymentController", "cashPaymentProcess_error: " + Gson().toJson(
+                            PaymentResultContext(
+                                false,
+                                (exception.localizedMessage ?: exception.message).toString(),
+                                null
+                            )
+                        )
+                    )
                     resultHandler(
                         PaymentResultContext(
                             false,
@@ -337,6 +392,15 @@ class PaymentController(private val context: Context) {
                     val body = response.body()
                     if (body?.errorMessage != null) {
                         CoroutineScope(Dispatchers.Main).launch {
+                            Log.d(
+                                "PaymentController", "giftPaymentProcess_error: " + Gson().toJson(
+                                    PaymentResultContext(
+                                        false,
+                                        body.errorMessage.toString(),
+                                        response.code()
+                                    )
+                                )
+                            )
                             resultHandler(
                                 PaymentResultContext(
                                     false,
@@ -347,6 +411,16 @@ class PaymentController(private val context: Context) {
                         }
                     } else {
                         CoroutineScope(Dispatchers.Main).launch {
+                            Log.d(
+                                "PaymentController", "giftPaymentProcess_success: " + Gson().toJson(
+                                    GiftResultData(
+                                        (response.body()?.transactionId ?: 0L).toString(),
+                                        paymentContext.tid.orEmpty(),
+                                        paymentContext.loyaltyNumber.orEmpty(),
+                                        paymentContext.amount ?: BigDecimal.ONE,
+                                    )
+                                )
+                            )
                             resultHandler(
                                 PaymentResultContext(
                                     response.isSuccessful,
@@ -364,6 +438,15 @@ class PaymentController(private val context: Context) {
                     }
                 } else {
                     CoroutineScope(Dispatchers.Main).launch {
+                        Log.d(
+                            "PaymentController", "giftPaymentProcess_error: " + Gson().toJson(
+                                PaymentResultContext(
+                                    false,
+                                    response.message().orEmpty(),
+                                    response.code()
+                                )
+                            )
+                        )
                         resultHandler(
                             PaymentResultContext(
                                 false,
@@ -374,7 +457,17 @@ class PaymentController(private val context: Context) {
                     }
                 }
             } catch (exception: Exception) {
+                FirebaseCrashlytics.getInstance().recordException(exception)
                 CoroutineScope(Dispatchers.Main).launch {
+                    Log.d(
+                        "PaymentController", "giftPaymentProcess_error: " + Gson().toJson(
+                            PaymentResultContext(
+                                false,
+                                (exception.localizedMessage ?: exception.message).toString(),
+                                null
+                            )
+                        )
+                    )
                     resultHandler(
                         PaymentResultContext(
                             false,
@@ -445,9 +538,23 @@ class PaymentController(private val context: Context) {
                     paymentResult = paymentResult.copy(
                         data = paymentResult.data?.copy(
                             data = paymentResult.data?.data?.copy(
-                                amount = BigDecimal(paymentResult.data?.data?.amount ?: "0").divide(BigDecimal(100)).toPlainString(),
-                                amountClear = BigDecimal(paymentResult.data?.data?.amountClear ?: "0").divide(BigDecimal(100)).toPlainString()
+                                amount = BigDecimal(paymentResult.data?.data?.amount ?: "0").divide(
+                                    BigDecimal(100)
+                                ).toPlainString(),
+                                amountClear = BigDecimal(
+                                    paymentResult.data?.data?.amountClear ?: "0"
+                                ).divide(BigDecimal(100)).toPlainString()
                             ) ?: throw RuntimeException("data is null")
+                        )
+                    )
+                    Log.d(
+                        "PaymentController", "cancelCardPayment_success: " + Gson().toJson(
+                            PaymentResultContext(
+                                success = paymentResult.success,
+                                message = paymentResult.message,
+                                code = paymentResult.code,
+                                data = paymentResult.data
+                            )
                         )
                     )
                     resultHandler(
@@ -492,6 +599,18 @@ class PaymentController(private val context: Context) {
                 )
                 if (response.isSuccessful) {
                     CoroutineScope(Dispatchers.Main).launch {
+                        Log.d(
+                            "PaymentController", "cancelCashPayment_success: " + Gson().toJson(
+                                PaymentResultContext(
+                                    true,
+                                    null,
+                                    null,
+                                    ReverseCashResultData(
+                                        reverseContext
+                                    )
+                                )
+                            )
+                        )
                         resultHandler(
                             PaymentResultContext(
                                 true,
@@ -505,6 +624,15 @@ class PaymentController(private val context: Context) {
                     }
                 } else {
                     CoroutineScope(Dispatchers.Main).launch {
+                        Log.d(
+                            "PaymentController", "cancelCashPayment_error: " + Gson().toJson(
+                                PaymentResultContext(
+                                    false,
+                                    response.message().orEmpty(),
+                                    response.code()
+                                )
+                            )
+                        )
                         resultHandler(
                             PaymentResultContext(
                                 false,
@@ -515,7 +643,17 @@ class PaymentController(private val context: Context) {
                     }
                 }
             } catch (exception: Exception) {
+                FirebaseCrashlytics.getInstance().recordException(exception)
                 CoroutineScope(Dispatchers.Main).launch {
+                    Log.d(
+                        "PaymentController", "cancelCashPayment_error: " + Gson().toJson(
+                            PaymentResultContext(
+                                false,
+                                (exception.localizedMessage ?: exception.message).toString(),
+                                null
+                            )
+                        )
+                    )
                     resultHandler(
                         PaymentResultContext(
                             false,
@@ -550,6 +688,15 @@ class PaymentController(private val context: Context) {
                     val body = response.body()
                     if (body?.errorMessage != null) {
                         CoroutineScope(Dispatchers.Main).launch {
+                            Log.d(
+                                "PaymentController", "cancelGiftPayment_error: " + Gson().toJson(
+                                    PaymentResultContext(
+                                        false,
+                                        body.errorMessage.toString(),
+                                        response.code()
+                                    )
+                                )
+                            )
                             resultHandler(
                                 PaymentResultContext(
                                     false,
@@ -560,6 +707,15 @@ class PaymentController(private val context: Context) {
                         }
                     } else {
                         CoroutineScope(Dispatchers.Main).launch {
+                            Log.d(
+                                "PaymentController", "cancelGiftPayment_success: " + Gson().toJson(
+                                    PaymentResultContext(
+                                        response.isSuccessful,
+                                        null,
+                                        null
+                                    )
+                                )
+                            )
                             resultHandler(
                                 PaymentResultContext(
                                     response.isSuccessful,
@@ -571,6 +727,15 @@ class PaymentController(private val context: Context) {
                     }
                 } else {
                     CoroutineScope(Dispatchers.Main).launch {
+                        Log.d(
+                            "PaymentController", "cancelGiftPayment_error: " + Gson().toJson(
+                                PaymentResultContext(
+                                    false,
+                                    response.message().orEmpty(),
+                                    response.code()
+                                )
+                            )
+                        )
                         resultHandler(
                             PaymentResultContext(
                                 false,
@@ -581,7 +746,17 @@ class PaymentController(private val context: Context) {
                     }
                 }
             } catch (exception: Exception) {
+                FirebaseCrashlytics.getInstance().recordException(exception)
                 CoroutineScope(Dispatchers.Main).launch {
+                    Log.d(
+                        "PaymentController", "cancelGiftPayment_error: " + Gson().toJson(
+                            PaymentResultContext(
+                                false,
+                                (exception.localizedMessage ?: exception.message).toString(),
+                                null
+                            )
+                        )
+                    )
                     resultHandler(
                         PaymentResultContext(
                             false,
@@ -646,6 +821,17 @@ class PaymentController(private val context: Context) {
                                 }
                             } else {
                                 CoroutineScope(Dispatchers.Main).launch {
+                                    Log.d(
+                                        "PaymentController", "balanceProcess_success: " + Gson().toJson(
+                                            GiftResult(
+                                                loyaltyCardTrack = resultData.LOYALTY_NUMBER.orEmpty(),
+                                                tid = resultData.TID.orEmpty(),
+                                                balance = response.body()?.balance?.divide(
+                                                    BigDecimal(100)
+                                                ) ?: BigDecimal.ZERO
+                                            )
+                                        )
+                                    )
                                     successHandler(
                                         GiftResult(
                                             loyaltyCardTrack = resultData.LOYALTY_NUMBER.orEmpty(),
@@ -663,6 +849,7 @@ class PaymentController(private val context: Context) {
                             }
                         }
                     } catch (exception: Exception) {
+                        FirebaseCrashlytics.getInstance().recordException(exception)
                         CoroutineScope(Dispatchers.Main).launch {
                             errorHandler(
                                 (exception.localizedMessage ?: exception.message).toString(),
