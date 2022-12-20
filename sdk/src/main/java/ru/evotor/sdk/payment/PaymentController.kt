@@ -817,9 +817,7 @@ class PaymentController(private val context: Context) {
                                             GiftResult(
                                                 loyaltyCardTrack = resultData.LOYALTY_NUMBER.orEmpty(),
                                                 tid = resultData.TID.orEmpty(),
-                                                balance = response.body()?.balance?.divide(
-                                                    BigDecimal(100)
-                                                ) ?: BigDecimal.ZERO
+                                                balance = response.body()?.balance ?: BigDecimal.ZERO
                                             )
                                         )
                                     )
