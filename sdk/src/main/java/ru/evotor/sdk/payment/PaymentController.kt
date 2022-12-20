@@ -12,7 +12,6 @@ import android.os.Build
 import android.provider.Settings
 import android.util.Log
 import androidx.core.content.ContextCompat
-import com.google.firebase.crashlytics.FirebaseCrashlytics
 import com.google.gson.Gson
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -68,7 +67,6 @@ class PaymentController(private val context: Context) {
                     throw RuntimeException(response.code().toString())
                 }
             } catch (exception: Exception) {
-                FirebaseCrashlytics.getInstance().recordException(exception)
                 CoroutineScope(Dispatchers.Main).launch {
                     errorHandler(exception)
                 }
@@ -153,9 +151,6 @@ class PaymentController(private val context: Context) {
                                         }
                                     }
                                 }
-                            } else {
-                                FirebaseCrashlytics.getInstance()
-                                    .recordException(RuntimeException("Bad device name"))
                             }
                         }
                     }
@@ -176,7 +171,7 @@ class PaymentController(private val context: Context) {
         try {
             context.unregisterReceiver(receiver)
         } catch (exception: Exception) {
-            FirebaseCrashlytics.getInstance().recordException(exception)
+            Log.e(PaymentController::class.toString(), exception.message.toString())
         }
     }
 
@@ -346,7 +341,6 @@ class PaymentController(private val context: Context) {
                     }
                 }
             } catch (exception: Exception) {
-                FirebaseCrashlytics.getInstance().recordException(exception)
                 CoroutineScope(Dispatchers.Main).launch {
                     Log.d(
                         "PaymentController", "cashPaymentProcess_error: " + Gson().toJson(
@@ -457,7 +451,6 @@ class PaymentController(private val context: Context) {
                     }
                 }
             } catch (exception: Exception) {
-                FirebaseCrashlytics.getInstance().recordException(exception)
                 CoroutineScope(Dispatchers.Main).launch {
                     Log.d(
                         "PaymentController", "giftPaymentProcess_error: " + Gson().toJson(
@@ -643,7 +636,6 @@ class PaymentController(private val context: Context) {
                     }
                 }
             } catch (exception: Exception) {
-                FirebaseCrashlytics.getInstance().recordException(exception)
                 CoroutineScope(Dispatchers.Main).launch {
                     Log.d(
                         "PaymentController", "cancelCashPayment_error: " + Gson().toJson(
@@ -746,7 +738,6 @@ class PaymentController(private val context: Context) {
                     }
                 }
             } catch (exception: Exception) {
-                FirebaseCrashlytics.getInstance().recordException(exception)
                 CoroutineScope(Dispatchers.Main).launch {
                     Log.d(
                         "PaymentController", "cancelGiftPayment_error: " + Gson().toJson(
@@ -847,7 +838,6 @@ class PaymentController(private val context: Context) {
                             }
                         }
                     } catch (exception: Exception) {
-                        FirebaseCrashlytics.getInstance().recordException(exception)
                         CoroutineScope(Dispatchers.Main).launch {
                             errorHandler(
                                 (exception.localizedMessage ?: exception.message).toString(),

@@ -8,7 +8,6 @@ import android.bluetooth.BluetoothSocket
 import android.content.Context
 import android.util.Log
 import android.widget.Toast
-import com.google.firebase.crashlytics.FirebaseCrashlytics
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.GlobalScope
 import kotlinx.coroutines.launch
@@ -68,7 +67,6 @@ class BluetoothConnectionService(private val context: Context) {
         try {
             socket?.connect()
         } catch (exception: Exception) {
-            FirebaseCrashlytics.getInstance().recordException(exception)
             socket?.close()
             initSocket()
             socket?.connect()
@@ -115,7 +113,6 @@ class BluetoothConnectionService(private val context: Context) {
                     val message = String(buffer, 0, bytes)
                     readPacketData(message)
                 } catch (exception: Exception) {
-                    FirebaseCrashlytics.getInstance().recordException(exception)
                     Log.e(TAG, exception.message.toString())
                     connectionActive.set(false)
                     break
@@ -135,7 +132,6 @@ class BluetoothConnectionService(private val context: Context) {
                 return
             }
         } catch (exception: Exception) {
-            FirebaseCrashlytics.getInstance().recordException(exception)
             return
         }
     }
@@ -144,7 +140,6 @@ class BluetoothConnectionService(private val context: Context) {
         try {
             socket?.outputStream?.write(data.toByteArray())
         } catch (exception: Exception) {
-            FirebaseCrashlytics.getInstance().recordException(exception)
             connectionActive.set(false)
             socket?.close()
         }
