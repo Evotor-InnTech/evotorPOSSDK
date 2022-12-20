@@ -1,0 +1,39 @@
+{
+  "project_info": {
+    "project_number": "372344726336",
+    "project_id": "mvideoevotor",
+    "storage_bucket": "mvideoevotor.appspot.com"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:372344726336:android:970b4bb598c0f2bef650a5",
+        "android_client_info": {
+          "package_name": "ru.evotor.mvideo_eldorado"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "372344726336-3l3omq5kv3ov7879fnggt4jcs7fbc2no.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBkVzNYBXrAq7y3fdf3AOTvyJiwWX1D0rs"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "372344726336-3l3omq5kv3ov7879fnggt4jcs7fbc2no.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
