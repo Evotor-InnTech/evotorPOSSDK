@@ -10,5 +10,8 @@ data class GiftActivationBody(
     val login: String,
     val amount: BigDecimal,
     @SerializedName("payment_product_text_data")
-    var paymentProductTextData: Map<String, String>? = null
+    var paymentProductTextData: Map<String, String>? = null,
+    @SerializedName("device_app_build")
+    val deviceAppBuild: String? = null,
+    val device: DeviceBody? = null
 )

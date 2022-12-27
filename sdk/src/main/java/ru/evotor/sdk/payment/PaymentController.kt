@@ -171,7 +171,6 @@ class PaymentController(private val context: Context) {
         try {
             context.unregisterReceiver(receiver)
         } catch (exception: Exception) {
-            Log.e(PaymentController::class.toString(), exception.message.toString())
         }
     }
 
@@ -289,9 +288,25 @@ class PaymentController(private val context: Context) {
     ) {
         CoroutineScope(Dispatchers.IO).launch {
             try {
+                var currentPaymentContext = paymentContext
+                currentPaymentContext = currentPaymentContext.copy(
+                    deviceAppBuild = "1.0.0",
+                    deviceId = Settings.Secure.getString(
+                        context.contentResolver,
+                        Settings.Secure.ANDROID_ID
+                    ),
+                    deviceModel = Build.MANUFACTURER,
+                    deviceName = Build.MODEL
+                )
                 val response = retrofitService.sendCash(
                     sdkToken.orEmpty(),
-                    paymentContext
+                    convertToBody(
+                        currentPaymentContext.copy(
+                            amount = currentPaymentContext.amount?.multiply(
+                                BigDecimal(100)
+                            )
+                        )
+                    )
                 )
                 if (response.isSuccessful) {
                     CoroutineScope(Dispatchers.Main).launch {
@@ -302,7 +317,7 @@ class PaymentController(private val context: Context) {
                                     null,
                                     null,
                                     CashResultData(
-                                        paymentContext,
+                                        currentPaymentContext,
                                         response.body()?.transactionId.orEmpty()
                                     )
                                 )
@@ -314,7 +329,7 @@ class PaymentController(private val context: Context) {
                                 null,
                                 null,
                                 CashResultData(
-                                    paymentContext,
+                                    currentPaymentContext,
                                     response.body()?.transactionId.orEmpty()
                                 )
                             )
@@ -372,14 +387,30 @@ class PaymentController(private val context: Context) {
     ) {
         CoroutineScope(Dispatchers.IO).launch {
             try {
+                var currentPaymentContext = paymentContext
+                currentPaymentContext = currentPaymentContext.copy(
+                    deviceAppBuild = "1.0.0",
+                    deviceId = Settings.Secure.getString(
+                        context.contentResolver,
+                        Settings.Secure.ANDROID_ID
+                    ),
+                    deviceModel = Build.MANUFACTURER,
+                    deviceName = Build.MODEL
+                )
                 val response = retrofitService.sendGift(
                     sdkToken.orEmpty(),
                     GiftActivationBody(
-                        loyaltyNumber = paymentContext.loyaltyNumber.orEmpty(),
-                        tid = paymentContext.tid.orEmpty(),
+                        loyaltyNumber = currentPaymentContext.loyaltyNumber.orEmpty(),
+                        tid = currentPaymentContext.tid.orEmpty(),
                         login = login.orEmpty(),
-                        amount = paymentContext.amount ?: BigDecimal.ONE,
-                        paymentProductTextData = paymentContext.paymentProductTextData
+                        amount = currentPaymentContext.amount ?: BigDecimal.ONE,
+                        paymentProductTextData = currentPaymentContext.paymentProductTextData,
+                        deviceAppBuild = currentPaymentContext.deviceAppBuild,
+                        device = DeviceBody(
+                            deviceId = currentPaymentContext.deviceId,
+                            deviceModel = currentPaymentContext.deviceModel,
+                            deviceName = currentPaymentContext.deviceName
+                        )
                     )
                 )
                 if (response.isSuccessful) {
@@ -409,9 +440,9 @@ class PaymentController(private val context: Context) {
                                 "PaymentController", "giftPaymentProcess_success: " + Gson().toJson(
                                     GiftResultData(
                                         (response.body()?.transactionId ?: 0L).toString(),
-                                        paymentContext.tid.orEmpty(),
-                                        paymentContext.loyaltyNumber.orEmpty(),
-                                        paymentContext.amount ?: BigDecimal.ONE,
+                                        currentPaymentContext.tid.orEmpty(),
+                                        currentPaymentContext.loyaltyNumber.orEmpty(),
+                                        currentPaymentContext.amount ?: BigDecimal.ONE,
                                     )
                                 )
                             )
@@ -422,9 +453,9 @@ class PaymentController(private val context: Context) {
                                     null,
                                     GiftResultData(
                                         (response.body()?.transactionId ?: 0L).toString(),
-                                        paymentContext.tid.orEmpty(),
-                                        paymentContext.loyaltyNumber.orEmpty(),
-                                        paymentContext.amount ?: BigDecimal.ONE,
+                                        currentPaymentContext.tid.orEmpty(),
+                                        currentPaymentContext.loyaltyNumber.orEmpty(),
+                                        currentPaymentContext.amount ?: BigDecimal.ONE,
                                     )
                                 )
                             )
@@ -586,9 +617,25 @@ class PaymentController(private val context: Context) {
     ) {
         CoroutineScope(Dispatchers.IO).launch {
             try {
+                var currentReverseContext = reverseContext
+                currentReverseContext = currentReverseContext.copy(
+                    deviceAppBuild = "1.0.0",
+                    deviceId = Settings.Secure.getString(
+                        context.contentResolver,
+                        Settings.Secure.ANDROID_ID
+                    ),
+                    deviceModel = Build.MANUFACTURER,
+                    deviceName = Build.MODEL
+                )
                 val response = retrofitService.reverseCash(
                     sdkToken.orEmpty(),
-                    reverseContext
+                    convertToBody(
+                        currentReverseContext.copy(
+                            returnAmount = currentReverseContext.returnAmount?.multiply(
+                                BigDecimal(100)
+                            )
+                        )
+                    )
                 )
                 if (response.isSuccessful) {
                     CoroutineScope(Dispatchers.Main).launch {
@@ -599,7 +646,7 @@ class PaymentController(private val context: Context) {
                                     null,
                                     null,
                                     ReverseCashResultData(
-                                        reverseContext
+                                        currentReverseContext
                                     )
                                 )
                             )
@@ -610,7 +657,7 @@ class PaymentController(private val context: Context) {
                                 null,
                                 null,
                                 ReverseCashResultData(
-                                    reverseContext
+                                    currentReverseContext
                                 )
                             )
                         )
@@ -667,13 +714,29 @@ class PaymentController(private val context: Context) {
     ) {
         CoroutineScope(Dispatchers.IO).launch {
             try {
+                var currentReverseContext = reverseContext
+                currentReverseContext = currentReverseContext.copy(
+                    deviceAppBuild = "1.0.0",
+                    deviceId = Settings.Secure.getString(
+                        context.contentResolver,
+                        Settings.Secure.ANDROID_ID
+                    ),
+                    deviceModel = Build.MANUFACTURER,
+                    deviceName = Build.MODEL
+                )
                 val response = retrofitService.cancelGift(
                     sdkToken.orEmpty(),
                     GiftCancelBody(
-                        loyalty_number = reverseContext.loyaltyNumber.orEmpty(),
-                        tid = reverseContext.tid.orEmpty(),
+                        loyalty_number = currentReverseContext.loyaltyNumber.orEmpty(),
+                        tid = currentReverseContext.tid.orEmpty(),
                         login = login.orEmpty(),
-                        transactionId = reverseContext.transactionID.orEmpty()
+                        transactionId = currentReverseContext.transactionID.orEmpty(),
+                        deviceAppBuild = currentReverseContext.deviceAppBuild,
+                        device = DeviceBody(
+                            deviceId = currentReverseContext.deviceId,
+                            deviceModel = currentReverseContext.deviceModel,
+                            deviceName = currentReverseContext.deviceName
+                        )
                     )
                 )
                 if (response.isSuccessful) {
@@ -813,11 +876,13 @@ class PaymentController(private val context: Context) {
                             } else {
                                 CoroutineScope(Dispatchers.Main).launch {
                                     Log.d(
-                                        "PaymentController", "balanceProcess_success: " + Gson().toJson(
+                                        "PaymentController",
+                                        "balanceProcess_success: " + Gson().toJson(
                                             GiftResult(
                                                 loyaltyCardTrack = resultData.LOYALTY_NUMBER.orEmpty(),
                                                 tid = resultData.TID.orEmpty(),
-                                                balance = response.body()?.balance ?: BigDecimal.ZERO
+                                                balance = response.body()?.balance
+                                                    ?: BigDecimal.ZERO
                                             )
                                         )
                                     )
@@ -852,4 +917,43 @@ class PaymentController(private val context: Context) {
     }
 
     fun getBluetoothService() = bluetoothService
+
+    private fun convertToBody(paymentContext: PaymentContext) = CashPaymentBody(
+        amount = paymentContext.amount,
+        description = paymentContext.description,
+        currency = paymentContext.currency?.name ?: Currency.RUB.name,
+        suppressSignatureWaiting = paymentContext.suppressSignatureWaiting,
+        paymentProductTextData = paymentContext.paymentProductTextData,
+        paymentProductCode = paymentContext.paymentProductCode,
+        extID = paymentContext.extID,
+        method = paymentContext.method,
+        acquirerCode = paymentContext.acquirerCode,
+        tid = paymentContext.tid,
+        login = paymentContext.login,
+        password = paymentContext.password,
+        deviceAppBuild = paymentContext.deviceAppBuild,
+        device = DeviceBody(
+            deviceId = paymentContext.deviceId,
+            deviceName = paymentContext.deviceName,
+            deviceModel = paymentContext.deviceModel
+        )
+    )
+
+    private fun convertToBody(reverseContext: ReverseContext) = CashReverseBody(
+        transactionID = reverseContext.transactionID,
+        returnAmount = reverseContext.returnAmount,
+        currency = reverseContext.currency?.name ?: Currency.RUB.name,
+        suppressSignatureWaiting = reverseContext.suppressSignatureWaiting,
+        extID = reverseContext.extID,
+        acquirerCode = reverseContext.acquirerCode,
+        tid = reverseContext.tid,
+        login = reverseContext.login,
+        password = reverseContext.password,
+        deviceAppBuild = reverseContext.deviceAppBuild,
+        device = DeviceBody(
+            deviceId = reverseContext.deviceId,
+            deviceName = reverseContext.deviceName,
+            deviceModel = reverseContext.deviceModel
+        )
+    )
 }

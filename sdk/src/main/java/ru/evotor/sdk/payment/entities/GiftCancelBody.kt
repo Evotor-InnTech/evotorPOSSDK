@@ -11,4 +11,7 @@ data class GiftCancelBody(
     val login: String,
     @SerializedName("transaction_id")
     val transactionId: String,
+    @SerializedName("device_app_build")
+    val deviceAppBuild: String? = null,
+    val device: DeviceBody? = null
 )
