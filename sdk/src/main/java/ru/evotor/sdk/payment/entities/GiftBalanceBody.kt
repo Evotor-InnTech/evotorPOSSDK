@@ -6,5 +6,8 @@ data class GiftBalanceBody(
     @SerializedName("loyalty_number")
     val loyaltyNumber: String,
     val tid: String,
-    val login: String
+    val login: String,
+    @SerializedName("device_app_build")
+    val deviceAppBuild: String,
+    val device: DeviceBody
 )

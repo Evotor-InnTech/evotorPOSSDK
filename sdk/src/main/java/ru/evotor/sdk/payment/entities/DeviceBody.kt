@@ -4,9 +4,9 @@ import com.google.gson.annotations.SerializedName
 
 data class DeviceBody(
     @SerializedName("device_id")
-    val deviceId: String? = null,
+    val deviceId: String,
     @SerializedName("device_model")
-    val deviceModel: String? = null,
+    val deviceModel: String,
     @SerializedName("device_name")
-    val deviceName: String? = null
+    val deviceName: String
 )

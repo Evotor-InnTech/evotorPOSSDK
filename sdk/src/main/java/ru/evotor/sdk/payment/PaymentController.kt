@@ -13,6 +13,7 @@ import android.provider.Settings
 import android.util.Log
 import androidx.core.content.ContextCompat
 import com.google.gson.Gson
+import com.google.gson.annotations.SerializedName
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -405,11 +406,11 @@ class PaymentController(private val context: Context) {
                         login = login.orEmpty(),
                         amount = currentPaymentContext.amount ?: BigDecimal.ONE,
                         paymentProductTextData = currentPaymentContext.paymentProductTextData,
-                        deviceAppBuild = currentPaymentContext.deviceAppBuild,
+                        deviceAppBuild = currentPaymentContext.deviceAppBuild.orEmpty(),
                         device = DeviceBody(
-                            deviceId = currentPaymentContext.deviceId,
-                            deviceModel = currentPaymentContext.deviceModel,
-                            deviceName = currentPaymentContext.deviceName
+                            deviceId = currentPaymentContext.deviceId.orEmpty(),
+                            deviceModel = currentPaymentContext.deviceModel.orEmpty(),
+                            deviceName = currentPaymentContext.deviceName.orEmpty()
                         )
                     )
                 )
@@ -731,11 +732,11 @@ class PaymentController(private val context: Context) {
                         tid = currentReverseContext.tid.orEmpty(),
                         login = login.orEmpty(),
                         transactionId = currentReverseContext.transactionID.orEmpty(),
-                        deviceAppBuild = currentReverseContext.deviceAppBuild,
+                        deviceAppBuild = currentReverseContext.deviceAppBuild.orEmpty(),
                         device = DeviceBody(
-                            deviceId = currentReverseContext.deviceId,
-                            deviceModel = currentReverseContext.deviceModel,
-                            deviceName = currentReverseContext.deviceName
+                            deviceId = currentReverseContext.deviceId.orEmpty(),
+                            deviceModel = currentReverseContext.deviceModel.orEmpty(),
+                            deviceName = currentReverseContext.deviceName.orEmpty()
                         )
                     )
                 )
@@ -864,7 +865,16 @@ class PaymentController(private val context: Context) {
                             GiftBalanceBody(
                                 loyaltyNumber = resultData.LOYALTY_NUMBER.orEmpty(),
                                 tid = resultData.TID.orEmpty(),
-                                login = login.orEmpty()
+                                login = login.orEmpty(),
+                                deviceAppBuild = "1.0.0",
+                                device = DeviceBody(
+                                    deviceId = Settings.Secure.getString(
+                                        context.contentResolver,
+                                        Settings.Secure.ANDROID_ID
+                                    ),
+                                    deviceModel = Build.MANUFACTURER,
+                                    deviceName = Build.MODEL
+                                )
                             )
                         )
                         if (response.isSuccessful) {
@@ -933,9 +943,9 @@ class PaymentController(private val context: Context) {
         password = paymentContext.password,
         deviceAppBuild = paymentContext.deviceAppBuild,
         device = DeviceBody(
-            deviceId = paymentContext.deviceId,
-            deviceName = paymentContext.deviceName,
-            deviceModel = paymentContext.deviceModel
+            deviceId = paymentContext.deviceId.orEmpty(),
+            deviceName = paymentContext.deviceName.orEmpty(),
+            deviceModel = paymentContext.deviceModel.orEmpty()
         )
     )
 
@@ -951,9 +961,9 @@ class PaymentController(private val context: Context) {
         password = reverseContext.password,
         deviceAppBuild = reverseContext.deviceAppBuild,
         device = DeviceBody(
-            deviceId = reverseContext.deviceId,
-            deviceName = reverseContext.deviceName,
-            deviceModel = reverseContext.deviceModel
+            deviceId = reverseContext.deviceId.orEmpty(),
+            deviceName = reverseContext.deviceName.orEmpty(),
+            deviceModel = reverseContext.deviceModel.orEmpty()
         )
     )
 }
