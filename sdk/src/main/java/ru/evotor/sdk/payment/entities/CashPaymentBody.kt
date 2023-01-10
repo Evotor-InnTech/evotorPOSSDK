@@ -11,7 +11,7 @@ data class CashPaymentBody(
     /**
      * Сумма платежа
      */
-    var amount: BigDecimal? = null,
+    var amount: Long? = null,
     /**
      * Описание платежа
      */

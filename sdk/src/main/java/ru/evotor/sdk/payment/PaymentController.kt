@@ -929,7 +929,7 @@ class PaymentController(private val context: Context) {
     fun getBluetoothService() = bluetoothService
 
     private fun convertToBody(paymentContext: PaymentContext) = CashPaymentBody(
-        amount = paymentContext.amount,
+        amount = (paymentContext.amount ?: BigDecimal.ZERO).toLong(),
         description = paymentContext.description,
         currency = paymentContext.currency?.name ?: Currency.RUB.name,
         suppressSignatureWaiting = paymentContext.suppressSignatureWaiting,
@@ -951,7 +951,7 @@ class PaymentController(private val context: Context) {
 
     private fun convertToBody(reverseContext: ReverseContext) = CashReverseBody(
         transactionID = reverseContext.transactionID,
-        returnAmount = reverseContext.returnAmount,
+        returnAmount = (reverseContext.returnAmount ?: BigDecimal.ZERO).toLong(),
         currency = reverseContext.currency?.name ?: Currency.RUB.name,
         suppressSignatureWaiting = reverseContext.suppressSignatureWaiting,
         extID = reverseContext.extID,

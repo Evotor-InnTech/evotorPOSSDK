@@ -19,7 +19,7 @@ data class CashReverseBody(
      * Сумма, на которую будет выполнена отмена. Для полной
     отмены установить null
      */
-    var returnAmount: BigDecimal? = null,
+    var returnAmount: Long? = null,
     /**
      * Валюта, используемая для отмены/возврата
      */
