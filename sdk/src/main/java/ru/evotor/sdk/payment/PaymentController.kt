@@ -229,8 +229,22 @@ class PaymentController(private val context: Context) {
         val resultDataListener = object : ResultDataListener {
             override fun onResult(data: String) {
                 CoroutineScope(Dispatchers.Main).launch {
-                    var paymentResult =
-                        Gson().fromJson(data, CardPaymentResultContext::class.java)
+                    var paymentResult: CardPaymentResultContext
+                    try {
+                        Log.d("PaymentController", data)
+                        paymentResult = Gson().fromJson(data, CardPaymentResultContext::class.java)
+                    } catch (exception: Exception) {
+                        Log.e("PaymentController", exception.message.toString())
+                        resultHandler(
+                            PaymentResultContext(
+                                success = false,
+                                message = exception.message.toString(),
+                                code = null,
+                                data = null
+                            )
+                        )
+                        return@launch
+                    }
                     paymentResult = paymentResult.copy(
                         data = paymentResult.data?.copy(
                             data = paymentResult.data?.data?.copy(
@@ -558,8 +572,22 @@ class PaymentController(private val context: Context) {
         val resultDataListener = object : ResultDataListener {
             override fun onResult(data: String) {
                 CoroutineScope(Dispatchers.Main).launch {
-                    var paymentResult =
-                        Gson().fromJson(data, CardRefundResultContext::class.java)
+                    var paymentResult: CardRefundResultContext
+                    try {
+                        Log.d("PaymentController", data)
+                        paymentResult = Gson().fromJson(data, CardRefundResultContext::class.java)
+                    } catch (exception: Exception) {
+                        Log.e("PaymentController", exception.message.toString())
+                        resultHandler(
+                            PaymentResultContext(
+                                success = false,
+                                message = exception.message.toString(),
+                                code = null,
+                                data = null
+                            )
+                        )
+                        return@launch
+                    }
                     paymentResult = paymentResult.copy(
                         data = paymentResult.data?.copy(
                             data = paymentResult.data?.data?.copy(
@@ -857,7 +885,20 @@ class PaymentController(private val context: Context) {
         val resultDataListener = object : ResultDataListener {
             override fun onResult(data: String) {
                 CoroutineScope(Dispatchers.IO).launch {
-                    val resultData = Gson().fromJson(data, ResultData::class.java)
+                    val resultData: ResultData
+                    try {
+                        Log.d("PaymentController", data)
+                        resultData = Gson().fromJson(data, ResultData::class.java)
+                    } catch (exception: Exception) {
+                        CoroutineScope(Dispatchers.Main).launch {
+                            Log.e("PaymentController", exception.message.toString())
+                            errorHandler(
+                                (exception.localizedMessage ?: exception.message).toString(),
+                                null
+                            )
+                        }
+                        return@launch
+                    }
 
                     try {
                         val response = retrofitService.getGiftBalance(
