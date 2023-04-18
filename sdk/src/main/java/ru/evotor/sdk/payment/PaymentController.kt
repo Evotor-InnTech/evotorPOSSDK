@@ -418,7 +418,9 @@ class PaymentController(private val context: Context) {
                         loyaltyNumber = currentPaymentContext.loyaltyNumber.orEmpty(),
                         tid = currentPaymentContext.tid.orEmpty(),
                         login = login.orEmpty(),
-                        amount = currentPaymentContext.amount ?: BigDecimal.ONE,
+                        amount = (currentPaymentContext.amount ?: BigDecimal.ZERO).divide(
+                            BigDecimal(100)
+                        ),
                         paymentProductTextData = currentPaymentContext.paymentProductTextData,
                         deviceAppBuild = currentPaymentContext.deviceAppBuild.orEmpty(),
                         device = DeviceBody(
@@ -457,7 +459,9 @@ class PaymentController(private val context: Context) {
                                         (response.body()?.transactionId ?: 0L).toString(),
                                         currentPaymentContext.tid.orEmpty(),
                                         currentPaymentContext.loyaltyNumber.orEmpty(),
-                                        currentPaymentContext.amount ?: BigDecimal.ONE,
+                                        (currentPaymentContext.amount ?: BigDecimal.ZERO).divide(
+                                            BigDecimal(100)
+                                        )
                                     )
                                 )
                             )
@@ -470,7 +474,9 @@ class PaymentController(private val context: Context) {
                                         (response.body()?.transactionId ?: 0L).toString(),
                                         currentPaymentContext.tid.orEmpty(),
                                         currentPaymentContext.loyaltyNumber.orEmpty(),
-                                        currentPaymentContext.amount ?: BigDecimal.ONE,
+                                        (currentPaymentContext.amount ?: BigDecimal.ZERO).divide(
+                                            BigDecimal(100)
+                                        )
                                     )
                                 )
                             )
@@ -932,8 +938,7 @@ class PaymentController(private val context: Context) {
                                             GiftResult(
                                                 loyaltyCardTrack = resultData.LOYALTY_NUMBER.orEmpty(),
                                                 tid = resultData.TID.orEmpty(),
-                                                balance = response.body()?.balance
-                                                    ?: BigDecimal.ZERO
+                                                balance = (response.body()?.balance ?: BigDecimal.ZERO).divide(BigDecimal(100))
                                             )
                                         )
                                     )
@@ -941,7 +946,7 @@ class PaymentController(private val context: Context) {
                                         GiftResult(
                                             loyaltyCardTrack = resultData.LOYALTY_NUMBER.orEmpty(),
                                             tid = resultData.TID.orEmpty(),
-                                            balance = response.body()?.balance ?: BigDecimal.ZERO
+                                            balance = (response.body()?.balance ?: BigDecimal.ZERO).divide(BigDecimal(100))
                                         )
                                     )
                                 }
