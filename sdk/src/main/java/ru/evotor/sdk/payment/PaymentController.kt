@@ -418,14 +418,17 @@ class PaymentController(private val context: Context) {
                         loyaltyNumber = currentPaymentContext.loyaltyNumber.orEmpty(),
                         tid = currentPaymentContext.tid.orEmpty(),
                         login = login.orEmpty(),
-                        amount = currentPaymentContext.amount ?: BigDecimal.ZERO,
+                        amount = (currentPaymentContext.amount ?: BigDecimal.ZERO).multiply(
+                            BigDecimal(100)
+                        ),
                         paymentProductTextData = currentPaymentContext.paymentProductTextData,
                         deviceAppBuild = currentPaymentContext.deviceAppBuild.orEmpty(),
                         device = DeviceBody(
                             deviceId = currentPaymentContext.deviceId.orEmpty(),
                             deviceModel = currentPaymentContext.deviceModel.orEmpty(),
                             deviceName = currentPaymentContext.deviceName.orEmpty()
-                        )
+                        ),
+                        extID = currentPaymentContext.extID
                     )
                 )
                 if (response.isSuccessful) {
@@ -765,7 +768,8 @@ class PaymentController(private val context: Context) {
                             deviceId = currentReverseContext.deviceId.orEmpty(),
                             deviceModel = currentReverseContext.deviceModel.orEmpty(),
                             deviceName = currentReverseContext.deviceName.orEmpty()
-                        )
+                        ),
+                        extID = currentReverseContext.extID
                     )
                 )
                 if (response.isSuccessful) {

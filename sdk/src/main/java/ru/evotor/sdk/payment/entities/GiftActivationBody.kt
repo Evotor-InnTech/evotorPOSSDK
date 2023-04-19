@@ -13,5 +13,6 @@ data class GiftActivationBody(
     var paymentProductTextData: Map<String, String>? = null,
     @SerializedName("device_app_build")
     val deviceAppBuild: String,
-    val device: DeviceBody
+    val device: DeviceBody,
+    var extID: String? = null
 )
