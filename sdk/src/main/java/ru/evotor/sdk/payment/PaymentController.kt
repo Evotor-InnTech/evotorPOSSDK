@@ -418,9 +418,7 @@ class PaymentController(private val context: Context) {
                         loyaltyNumber = currentPaymentContext.loyaltyNumber.orEmpty(),
                         tid = currentPaymentContext.tid.orEmpty(),
                         login = login.orEmpty(),
-                        amount = (currentPaymentContext.amount ?: BigDecimal.ZERO).divide(
-                            BigDecimal(100)
-                        ),
+                        amount = currentPaymentContext.amount ?: BigDecimal.ZERO,
                         paymentProductTextData = currentPaymentContext.paymentProductTextData,
                         deviceAppBuild = currentPaymentContext.deviceAppBuild.orEmpty(),
                         device = DeviceBody(
@@ -459,9 +457,7 @@ class PaymentController(private val context: Context) {
                                         (response.body()?.transactionId ?: 0L).toString(),
                                         currentPaymentContext.tid.orEmpty(),
                                         currentPaymentContext.loyaltyNumber.orEmpty(),
-                                        (currentPaymentContext.amount ?: BigDecimal.ZERO).divide(
-                                            BigDecimal(100)
-                                        )
+                                        (currentPaymentContext.amount ?: BigDecimal.ZERO)
                                     )
                                 )
                             )
@@ -474,9 +470,7 @@ class PaymentController(private val context: Context) {
                                         (response.body()?.transactionId ?: 0L).toString(),
                                         currentPaymentContext.tid.orEmpty(),
                                         currentPaymentContext.loyaltyNumber.orEmpty(),
-                                        (currentPaymentContext.amount ?: BigDecimal.ZERO).divide(
-                                            BigDecimal(100)
-                                        )
+                                        (currentPaymentContext.amount ?: BigDecimal.ZERO)
                                     )
                                 )
                             )
