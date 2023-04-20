@@ -10,5 +10,5 @@ data class GiftActivateResponse(
     @SerializedName("error_message")
     val errorMessage: String?,
     @SerializedName("transaction_id")
-    val transactionId: Long,
+    val transactionId: String,
 )
