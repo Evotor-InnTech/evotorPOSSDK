@@ -37,7 +37,7 @@ interface RetrofitService {
         @Body giftBody: GiftActivationBody
     ): Response<GiftActivateResponse>
 
-    @POST("giftcard/cancel")
+    @POST("giftcard/lastmile/cancel")
     suspend fun cancelGift(
         @Header("Authorization") token: String,
         @Body cancelGiftBody: GiftCancelBody
