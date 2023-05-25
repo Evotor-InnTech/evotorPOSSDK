@@ -32,6 +32,8 @@ class PaymentController(private val context: Context) {
     private val bluetoothService: BluetoothService = BluetoothService(context)
     private val retrofitService: RetrofitService = RetrofitCommon.retrofitService
 
+    private var stateListener: StateListener? = null
+
     private var sdkToken: String? = null
     private var login: String? = null
     private var password: String? = null
@@ -60,14 +62,18 @@ class PaymentController(private val context: Context) {
     ) {
         CoroutineScope(Dispatchers.IO).launch {
             try {
+//                stateListener?.changeState(PayState.AUTH_STARTED)
                 val response = retrofitService.getToken(login.orEmpty(), password.orEmpty())
                 if (response.isSuccessful) {
+//                    stateListener?.changeState(PayState.AUTH_SUCCESS)
                     sdkToken = response.body()?.string()
                     successHandler(sdkToken.orEmpty())
                 } else {
+                    stateListener?.changeState(PayState.AUTH_ERROR, response.code().toString())
                     throw RuntimeException(response.code().toString())
                 }
             } catch (exception: Exception) {
+                stateListener?.changeState(PayState.AUTH_ERROR, exception.message.toString())
                 CoroutineScope(Dispatchers.Main).launch {
                     errorHandler(exception)
                 }
@@ -84,11 +90,17 @@ class PaymentController(private val context: Context) {
         onSuccessHandler: (BluetoothDevice) -> Unit,
         errorHandler: (String) -> Unit
     ) {
+        stateListener?.changeState(PayState.CONNECTING)
+
         if (ContextCompat.checkSelfPermission(
                 context,
                 Manifest.permission.BLUETOOTH_CONNECT
             ) != PackageManager.PERMISSION_GRANTED && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S
         ) {
+            stateListener?.changeState(
+                PayState.BLUETOOTH_IS_DISABLED,
+                "Необходим Manifest.permission.BLUETOOTH_CONNECT permission"
+            )
             errorHandler("Необходим Manifest.permission.BLUETOOTH_CONNECT permission")
             return
         }
@@ -98,6 +110,10 @@ class PaymentController(private val context: Context) {
                 Manifest.permission.BLUETOOTH_SCAN
             ) != PackageManager.PERMISSION_GRANTED && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S
         ) {
+            stateListener?.changeState(
+                PayState.BLUETOOTH_IS_DISABLED,
+                "Необходим Manifest.permission.BLUETOOTH_SCAN permission"
+            )
             errorHandler("Необходим Manifest.permission.BLUETOOTH_SCAN permission")
             return
         }
@@ -107,6 +123,10 @@ class PaymentController(private val context: Context) {
                 Manifest.permission.ACCESS_COARSE_LOCATION
             ) != PackageManager.PERMISSION_GRANTED
         ) {
+            stateListener?.changeState(
+                PayState.BLUETOOTH_IS_DISABLED,
+                "Необходим Manifest.permission.ACCESS_COARSE_LOCATION permission"
+            )
             errorHandler("Необходим Manifest.permission.ACCESS_COARSE_LOCATION permission")
             return
         }
@@ -115,17 +135,23 @@ class PaymentController(private val context: Context) {
         if (pairedDevice != null) {
             CoroutineScope(Dispatchers.IO).launch {
                 try {
+//                    stateListener?.changeState(PayState.DEVICE_CONNECTED)
                     bluetoothService.selectBluetoothDevice(pairedDevice.address, pairedDevice)
                     CoroutineScope(Dispatchers.Main).launch {
                         onSuccessHandler(pairedDevice)
                     }
                 } catch (exception: Exception) {
+                    stateListener?.changeState(
+                        PayState.BLUETOOTH_IS_DISABLED,
+                        exception.message.toString()
+                    )
                     CoroutineScope(Dispatchers.Main).launch {
                         errorHandler(exception.message.toString())
                     }
                 }
             }
         } else {
+//            stateListener?.changeState(PayState.DEVICE_DISCOVERY)
             receiver = object : BroadcastReceiver() {
                 @SuppressLint("MissingPermission")
                 override fun onReceive(context: Context, intent: Intent) {
@@ -139,6 +165,7 @@ class PaymentController(private val context: Context) {
                             ) {
                                 CoroutineScope(Dispatchers.IO).launch {
                                     try {
+//                                        stateListener?.changeState(PayState.DEVICE_CONNECTED)
                                         bluetoothService.selectBluetoothDevice(
                                             device.address,
                                             device
@@ -147,6 +174,10 @@ class PaymentController(private val context: Context) {
                                             onSuccessHandler(device)
                                         }
                                     } catch (exception: Exception) {
+                                        stateListener?.changeState(
+                                            PayState.BLUETOOTH_IS_DISABLED,
+                                            exception.message.toString()
+                                        )
                                         CoroutineScope(Dispatchers.Main).launch {
                                             errorHandler(exception.message.toString())
                                         }
@@ -171,6 +202,7 @@ class PaymentController(private val context: Context) {
     fun disable() {
         try {
             context.unregisterReceiver(receiver)
+            stateListener?.changeState(PayState.DISCONNECTED)
         } catch (exception: Exception) {
         }
     }
@@ -226,6 +258,7 @@ class PaymentController(private val context: Context) {
         paymentContext: PaymentContext,
         resultHandler: (PaymentResultContext) -> Unit
     ) {
+        stateListener?.changeState(PayState.TRANSACTION_STARTED)
         val resultDataListener = object : ResultDataListener {
             override fun onResult(data: String) {
                 CoroutineScope(Dispatchers.Main).launch {
@@ -235,6 +268,10 @@ class PaymentController(private val context: Context) {
                         paymentResult = Gson().fromJson(data, CardPaymentResultContext::class.java)
                     } catch (exception: Exception) {
                         Log.e("PaymentController", exception.message.toString())
+                        stateListener?.changeState(
+                            PayState.ANY_ERROR,
+                            exception.message.toString()
+                        )
                         resultHandler(
                             PaymentResultContext(
                                 success = false,
@@ -267,6 +304,14 @@ class PaymentController(private val context: Context) {
                             )
                         )
                     )
+                    if (paymentResult.success) {
+                        stateListener?.changeState(PayState.PAY_FINISH)
+                    } else {
+                        stateListener?.changeState(
+                            PayState.ANY_ERROR,
+                            paymentResult.message
+                        )
+                    }
                     resultHandler(
                         PaymentResultContext(
                             success = paymentResult.success,
@@ -301,6 +346,7 @@ class PaymentController(private val context: Context) {
         paymentContext: PaymentContext,
         resultHandler: (PaymentResultContext) -> Unit
     ) {
+        stateListener?.changeState(PayState.TRANSACTION_STARTED)
         CoroutineScope(Dispatchers.IO).launch {
             try {
                 var currentPaymentContext = paymentContext
@@ -338,6 +384,7 @@ class PaymentController(private val context: Context) {
                                 )
                             )
                         )
+                        stateListener?.changeState(PayState.PAY_FINISH)
                         resultHandler(
                             PaymentResultContext(
                                 true,
@@ -361,6 +408,10 @@ class PaymentController(private val context: Context) {
                                 )
                             )
                         )
+                        stateListener?.changeState(
+                            PayState.ANY_ERROR,
+                            response.message().orEmpty()
+                        )
                         resultHandler(
                             PaymentResultContext(
                                 false,
@@ -381,6 +432,10 @@ class PaymentController(private val context: Context) {
                             )
                         )
                     )
+                    stateListener?.changeState(
+                        PayState.ANY_ERROR,
+                        (exception.localizedMessage ?: exception.message).toString()
+                    )
                     resultHandler(
                         PaymentResultContext(
                             false,
@@ -400,6 +455,7 @@ class PaymentController(private val context: Context) {
         paymentContext: PaymentContext,
         resultHandler: (PaymentResultContext) -> Unit
     ) {
+        stateListener?.changeState(PayState.TRANSACTION_STARTED)
         CoroutineScope(Dispatchers.IO).launch {
             try {
                 var currentPaymentContext = paymentContext
@@ -444,6 +500,10 @@ class PaymentController(private val context: Context) {
                                     )
                                 )
                             )
+                            stateListener?.changeState(
+                                PayState.ANY_ERROR,
+                                body.errorMessage.toString()
+                            )
                             resultHandler(
                                 PaymentResultContext(
                                     false,
@@ -464,6 +524,7 @@ class PaymentController(private val context: Context) {
                                     )
                                 )
                             )
+                            stateListener?.changeState(PayState.PAY_FINISH)
                             resultHandler(
                                 PaymentResultContext(
                                     response.isSuccessful,
@@ -490,6 +551,10 @@ class PaymentController(private val context: Context) {
                                 )
                             )
                         )
+                        stateListener?.changeState(
+                            PayState.ANY_ERROR,
+                            response.message().orEmpty()
+                        )
                         resultHandler(
                             PaymentResultContext(
                                 false,
@@ -509,6 +574,10 @@ class PaymentController(private val context: Context) {
                                 null
                             )
                         )
+                    )
+                    stateListener?.changeState(
+                        PayState.ANY_ERROR,
+                        (exception.localizedMessage ?: exception.message).toString()
                     )
                     resultHandler(
                         PaymentResultContext(
@@ -572,6 +641,7 @@ class PaymentController(private val context: Context) {
         reverseContext: ReverseContext,
         resultHandler: (PaymentResultContext) -> Unit
     ) {
+        stateListener?.changeState(PayState.TRANSACTION_STARTED)
         val resultDataListener = object : ResultDataListener {
             override fun onResult(data: String) {
                 CoroutineScope(Dispatchers.Main).launch {
@@ -581,6 +651,10 @@ class PaymentController(private val context: Context) {
                         paymentResult = Gson().fromJson(data, CardRefundResultContext::class.java)
                     } catch (exception: Exception) {
                         Log.e("PaymentController", exception.message.toString())
+                        stateListener?.changeState(
+                            PayState.ANY_ERROR,
+                            exception.message.toString()
+                        )
                         resultHandler(
                             PaymentResultContext(
                                 success = false,
@@ -613,6 +687,14 @@ class PaymentController(private val context: Context) {
                             )
                         )
                     )
+                    if (paymentResult.success) {
+                        stateListener?.changeState(PayState.PAY_FINISH)
+                    } else {
+                        stateListener?.changeState(
+                            PayState.ANY_ERROR,
+                            paymentResult.message
+                        )
+                    }
                     resultHandler(
                         PaymentResultContext(
                             success = paymentResult.success,
@@ -647,6 +729,7 @@ class PaymentController(private val context: Context) {
         reverseContext: ReverseContext,
         resultHandler: (PaymentResultContext) -> Unit
     ) {
+        stateListener?.changeState(PayState.TRANSACTION_STARTED)
         CoroutineScope(Dispatchers.IO).launch {
             try {
                 var currentReverseContext = reverseContext
@@ -683,6 +766,7 @@ class PaymentController(private val context: Context) {
                                 )
                             )
                         )
+                        stateListener?.changeState(PayState.PAY_FINISH)
                         resultHandler(
                             PaymentResultContext(
                                 true,
@@ -705,6 +789,10 @@ class PaymentController(private val context: Context) {
                                 )
                             )
                         )
+                        stateListener?.changeState(
+                            PayState.ANY_ERROR,
+                            response.message().orEmpty()
+                        )
                         resultHandler(
                             PaymentResultContext(
                                 false,
@@ -725,6 +813,10 @@ class PaymentController(private val context: Context) {
                             )
                         )
                     )
+                    stateListener?.changeState(
+                        PayState.ANY_ERROR,
+                        (exception.localizedMessage ?: exception.message).toString()
+                    )
                     resultHandler(
                         PaymentResultContext(
                             false,
@@ -744,6 +836,7 @@ class PaymentController(private val context: Context) {
         reverseContext: ReverseContext,
         resultHandler: (PaymentResultContext) -> Unit
     ) {
+        stateListener?.changeState(PayState.TRANSACTION_STARTED)
         CoroutineScope(Dispatchers.IO).launch {
             try {
                 var currentReverseContext = reverseContext
@@ -785,6 +878,10 @@ class PaymentController(private val context: Context) {
                                     )
                                 )
                             )
+                            stateListener?.changeState(
+                                PayState.ANY_ERROR,
+                                body.errorMessage.toString()
+                            )
                             resultHandler(
                                 PaymentResultContext(
                                     false,
@@ -804,6 +901,7 @@ class PaymentController(private val context: Context) {
                                     )
                                 )
                             )
+                            stateListener?.changeState(PayState.PAY_FINISH)
                             resultHandler(
                                 PaymentResultContext(
                                     response.isSuccessful,
@@ -824,6 +922,10 @@ class PaymentController(private val context: Context) {
                                 )
                             )
                         )
+                        stateListener?.changeState(
+                            PayState.ANY_ERROR,
+                            response.message().orEmpty()
+                        )
                         resultHandler(
                             PaymentResultContext(
                                 false,
@@ -843,6 +945,10 @@ class PaymentController(private val context: Context) {
                                 null
                             )
                         )
+                    )
+                    stateListener?.changeState(
+                        PayState.ANY_ERROR,
+                        (exception.localizedMessage ?: exception.message).toString()
                     )
                     resultHandler(
                         PaymentResultContext(
@@ -886,6 +992,7 @@ class PaymentController(private val context: Context) {
         successHandler: (GiftResult) -> Unit,
         errorHandler: (String, Int?) -> Unit
     ) {
+//        stateListener?.changeState(PayState.GIFT_REQUEST_BALANCE_STARTED)
         val resultDataListener = object : ResultDataListener {
             override fun onResult(data: String) {
                 CoroutineScope(Dispatchers.IO).launch {
@@ -896,6 +1003,10 @@ class PaymentController(private val context: Context) {
                     } catch (exception: Exception) {
                         CoroutineScope(Dispatchers.Main).launch {
                             Log.e("PaymentController", exception.message.toString())
+//                            stateListener?.changeState(
+//                                PayState.GIFT_REQUEST_BALANCE_ERROR,
+//                                (exception.localizedMessage ?: exception.message).toString()
+//                            )
                             errorHandler(
                                 (exception.localizedMessage ?: exception.message).toString(),
                                 null
@@ -925,6 +1036,10 @@ class PaymentController(private val context: Context) {
                         if (response.isSuccessful) {
                             val body = response.body()
                             if (body?.errorMessage != null) {
+//                                stateListener?.changeState(
+//                                    PayState.GIFT_REQUEST_BALANCE_ERROR,
+//                                    response.code().toString()
+//                                )
                                 CoroutineScope(Dispatchers.Main).launch {
                                     errorHandler(body.errorMessage.toString(), response.code())
                                 }
@@ -936,25 +1051,36 @@ class PaymentController(private val context: Context) {
                                             GiftResult(
                                                 loyaltyCardTrack = resultData.LOYALTY_NUMBER.orEmpty(),
                                                 tid = resultData.TID.orEmpty(),
-                                                balance = (response.body()?.balance ?: BigDecimal.ZERO).divide(BigDecimal(100))
+                                                balance = (response.body()?.balance
+                                                    ?: BigDecimal.ZERO).divide(BigDecimal(100))
                                             )
                                         )
                                     )
+//                                    stateListener?.changeState(PayState.GIFT_REQUEST_BALANCE_SUCCESS)
                                     successHandler(
                                         GiftResult(
                                             loyaltyCardTrack = resultData.LOYALTY_NUMBER.orEmpty(),
                                             tid = resultData.TID.orEmpty(),
-                                            balance = (response.body()?.balance ?: BigDecimal.ZERO).divide(BigDecimal(100))
+                                            balance = (response.body()?.balance
+                                                ?: BigDecimal.ZERO).divide(BigDecimal(100))
                                         )
                                     )
                                 }
                             }
                         } else {
+//                            stateListener?.changeState(
+//                                PayState.GIFT_REQUEST_BALANCE_ERROR,
+//                                response.code().toString()
+//                            )
                             CoroutineScope(Dispatchers.Main).launch {
                                 errorHandler(response.message().orEmpty(), response.code())
                             }
                         }
                     } catch (exception: Exception) {
+//                        stateListener?.changeState(
+//                            PayState.GIFT_REQUEST_BALANCE_ERROR,
+//                            (exception.localizedMessage ?: exception.message).toString()
+//                        )
                         CoroutineScope(Dispatchers.Main).launch {
                             errorHandler(
                                 (exception.localizedMessage ?: exception.message).toString(),
@@ -971,6 +1097,23 @@ class PaymentController(private val context: Context) {
     }
 
     fun getBluetoothService() = bluetoothService
+
+    fun listenState(stateHandler: (PayState, String) -> Unit) {
+        stateListener = object : StateListener {
+            override fun changeState(payState: PayState, additionalMessage: String?) {
+                val messageBuilder = StringBuilder()
+                messageBuilder.append(payState.message)
+                additionalMessage?.let {
+                    messageBuilder.append(" ")
+                    messageBuilder.append("($additionalMessage)")
+                }
+
+                CoroutineScope(Dispatchers.Main).launch {
+                    stateHandler(payState, messageBuilder.toString())
+                }
+            }
+        }
+    }
 
     private fun convertToBody(paymentContext: PaymentContext) = CashPaymentBody(
         amount = (paymentContext.amount ?: BigDecimal.ZERO).toLong(),
